@@ -1,0 +1,48 @@
+%% DOCURA - Diagram 16 - Document Status State Machine
+%% The five statuses are exactly those named in FR-UPL-005; no status is invented here.
+%% Superseded and Deleted are derived from FR-DOC-005/006 and FR-DOC-007/008.
+%% Derived from: FR-UPL-005, FR-OCR-006/009/010, FR-INF-003/005, FR-DOC-005/007/008, EC-001 to EC-004
+stateDiagram-v2
+    direction TB
+    [*] --> Validating : USER selects a file
+
+    Validating --> Rejected : unsupported, oversized, or corrupt
+    Validating --> Queued : accepted
+    Rejected --> [*] : never enters the vault
+
+    Queued --> Queued : interrupted upload retried
+    Queued --> Processing : picked up asynchronously
+
+    Processing --> Failed : EC-001 extraction fails
+    Processing --> NeedsReview : EC-002 value below threshold
+    Processing --> NeedsReview : EC-003 type undetermined
+    Processing --> NeedsReview : EC-004 documents disagree
+    Processing --> Ready : classified and extracted
+
+    Failed --> Processing : USER retries
+    Failed --> Ready : USER enters it manually
+    Failed : ORIGINAL ALWAYS RETAINED.
+    Failed : Still stored and searchable by label.
+
+    NeedsReview --> Ready : USER corrects or resolves
+    NeedsReview : Below-threshold values NEVER
+    NeedsReview : fill automatically — BR-002.
+    NeedsReview : A conflict leaves NEITHER
+    NeedsReview : value authoritative — BR-004.
+
+    Ready --> NeedsReview : a new document introduces a conflict
+    Ready --> Processing : USER requests reprocessing
+    Ready : User corrections survive
+    Ready : reprocessing — BR-012.
+    Ready : The original is never
+    Ready : modified — BR-013.
+
+    Ready --> Superseded : USER adds a newer version
+    Superseded --> Ready : USER designates it primary
+    Superseded : The previous version is
+    Superseded : RETAINED, not discarded.
+
+    Ready --> Deleted : USER deletes, after confirmation
+    Superseded --> Deleted : USER deletes
+    Deleted --> Ready : restored within the grace period
+    Deleted --> [*] : grace elapses — file, information<br/>and derived copies destroyed

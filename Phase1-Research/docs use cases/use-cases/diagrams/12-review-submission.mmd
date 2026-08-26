@@ -1,0 +1,45 @@
+%% DOCURA - Diagram 12 - Final Review and Submission (sequence)
+%% Derived from: §1.17 FR-REV-001 to 006, §1.18 FR-SUB-001 to 004, BR-008, BR-015, EC-018, EC-019
+sequenceDiagram
+    autonumber
+    actor User as USER
+    participant Ext as DOCURA Extension
+    participant App as DOCURA
+    participant Form as EXTERNAL FORM
+
+    Ext->>Ext: Filling has finished for every field it could reach
+    Ext->>App: Retrieve the session record — actions, questions, approvals
+    App-->>Ext: Every value placed, option selected, document attached,<br/>question asked, approval requested and its outcome
+
+    rect rgb(240, 236, 252)
+    Note over User,Ext: THE REVIEW SUMMARY — FR-REV-001
+    Ext->>User: OUTSTANDING FIRST — every required field that is<br/>unfilled, skipped, or unresolved, listed before<br/>anything else and visually distinct
+    Ext->>User: DECLARATIONS AND CONSENT still uncompleted —<br/>identified, NOT completed
+    Ext->>User: FIELDS FILLED — the value, how it got there<br/>(automatic, answered, approved, or user-entered),<br/>and its source document
+    Ext->>User: DOCUMENTS ATTACHED — each one against<br/>the field that received it
+    Ext->>User: SENSITIVE APPROVALS — what was approved and denied
+    Ext->>User: WHAT DOCURA COULD NOT DO — unknown fields,<br/>unsupported field types, missing documents
+    end
+
+    loop While the user wants changes
+        User->>Ext: Select any review entry
+        Ext->>Form: Bring that field into view
+        alt USER edits a DOCURA-filled value
+            User->>Form: Type a different value
+            Ext->>App: Record the override with old and new values
+            Note over Ext,Form: Field re-marked USER-ENTERED.<br/>DOCURA never overwrites it again — BR-012.
+        else USER completes a declaration themselves
+            User->>Form: Tick it personally
+            Note over Ext,Form: Recorded as a user action.<br/>DOCURA took no part — BR-006.
+        end
+    end
+
+    rect rgb(240, 236, 252)
+    Note over Ext,Form: THE HARD STOP — BR-008
+    Ext->>User: "Submission is yours to perform."<br/>DOCURA hands control back and stops.
+    Ext->>App: Record that the session reached hand-back —<br/>and record NO claim about whether the user submitted
+    Note over Ext,Form: DOCURA does not activate, click, or otherwise<br/>operate the submit control — FR-SUB-002.<br/>No confidence level, setting, or preference changes this.
+    end
+
+    User->>Form: USER SUBMITS — DOCURA DOES NOT SUBMIT
+    Form-->>User: The institution receives the application

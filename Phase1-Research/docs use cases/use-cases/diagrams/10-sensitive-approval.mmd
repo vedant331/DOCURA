@@ -1,0 +1,38 @@
+%% DOCURA - Diagram 10 - Sensitive Information Approval (sequence)
+%% Derived from: §1.15 FR-SENS-001 to 006, §1.16 FR-APR-001 to 005, BR-005, BR-007, EC-011
+%% Step 2 §13.2 supplies the three-tier classification; no new tiering is invented here.
+sequenceDiagram
+    autonumber
+    actor User as USER
+    participant Ext as DOCURA Extension
+    participant App as DOCURA
+    participant Form as EXTERNAL FORM
+
+    Note over Ext,Form: The field has already been interpreted and classified.<br/>Classification happens BEFORE any value is placed — FR-FLD-003.
+
+    Ext->>Ext: Field tier is SENSITIVE — for example a<br/>government identifier or a signature image
+    Ext->>App: Request the attribute or document
+    App-->>Ext: Value plus its source document and confidence
+    Ext->>Ext: STOP — automatic disclosure is blocked here<br/>BR-005. No value reaches the form yet.
+
+    rect rgb(240, 236, 252)
+    Note over User,Ext: MANDATORY HUMAN DECISION POINT
+    Ext->>User: Show the EXACT value or file to be disclosed,<br/>the field that will receive it, its source document,<br/>and why DOCURA is asking rather than acting
+    Note right of Ext: Value is masked in DOCURA's own interface<br/>until the user reveals it — FR-SENS-004
+    end
+
+    alt USER APPROVES this one disclosure
+        User-->>Ext: Approve
+        Ext->>App: Record the approval and its subject
+        Ext->>Form: Place the value — visibly marked as DOCURA-filled
+        Form-->>Ext: Page validation runs as if a person had typed
+        Ext->>App: Record the value placed and its source
+        Note over Ext,Form: Approval covers THIS value, THIS field,<br/>THIS form, THIS session only.<br/>It is never inherited — BR-007, FR-SENS-005.
+    else USER DENIES
+        User-->>Ext: Deny
+        Ext->>App: Record the denial and its subject
+        Note over Ext,Form: Field left UNTOUCHED. The denial does not<br/>end the session — FR-APR-003, EC-011.
+        Ext->>User: Listed in the review summary as outstanding
+    end
+
+    Note over User,Form: The SAME information requested again — in another field,<br/>another form, or another session — requires a NEW approval.<br/>No control exists that approves in bulk or in advance — FR-APR-005.

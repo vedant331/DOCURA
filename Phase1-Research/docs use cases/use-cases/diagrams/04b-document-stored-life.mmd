@@ -1,0 +1,43 @@
+%% DOCURA - Diagram 04b - Document Lifecycle, part 2: stored life, retrieval and deletion
+%% Derived from: FR-DOC-004 to 008, FR-SRCH-001 to 004, FR-MATCH-006/007, NFR-SEC-002/007, NFR-PRIV-003
+%% Continues from Diagram 04a. Node-to-requirement key: see document-lifecycle.md
+flowchart TB
+    ready(["Status · ready — from Diagram 04a"])
+    store["STORED · encrypted at rest ·<br/>the original is never modified"]
+
+    use{"What does the<br/>user or a form need?"}
+
+    version["VERSIONING — a newer version is added,<br/>the previous one is RETAINED,<br/>one of them is designated primary"]
+    findit["SEARCH — by type, label, extracted text,<br/>or attribute value; results identify<br/>where the match occurred"]
+    retrieve["RETRIEVAL — the original served exactly<br/>as uploaded, through time-limited,<br/>single-purpose access"]
+    prepare["PREPARATION — a constraint-compliant COPY<br/>for a form; the stored original<br/>is left untouched"]
+    quality{"Constraints met without<br/>falling below the quality floor?"}
+    stopprep["EC-020 · prepare nothing, explain why,<br/>and offer the original"]
+
+    delete["DELETION — confirmation names the<br/>information that will be lost with it"]
+    grace{"Within the<br/>grace period?"}
+    restore["USER restores it"]
+    destroyed(["PERMANENTLY DESTROYED — the document,<br/>its extracted information, and every<br/>derived copy, within the stated period"])
+
+    ready --> store --> use
+    use -->|"a newer copy exists"| version --> store
+    use -->|"find something"| findit
+    use -->|"open the original"| retrieve
+    use -->|"attach to a form"| prepare --> quality
+    quality -->|"no"| stopprep
+    quality -->|"yes"| retrieve
+    use -->|"remove it"| delete --> grace
+    grace -->|"yes"| restore --> store
+    grace -->|"no"| destroyed
+
+    classDef autoCls fill:#4FC8A5,stroke:#12604a,color:#0A0E13
+    classDef failCls fill:#f6d6d6,stroke:#8a2b2b,stroke-width:2px,color:#0A0E13
+    classDef userCls fill:#EFEAE0,stroke:#0A0E13,stroke-width:2px,color:#0A0E13
+    classDef decCls fill:#fff5e0,stroke:#6b4408,color:#0A0E13
+    classDef consentCls fill:#9A8CF0,stroke:#3a2f7a,stroke-width:3px,color:#0A0E13
+
+    class store,findit,retrieve,prepare,version,ready autoCls
+    class stopprep failCls
+    class delete,restore userCls
+    class destroyed consentCls
+    class use,grace,quality decCls

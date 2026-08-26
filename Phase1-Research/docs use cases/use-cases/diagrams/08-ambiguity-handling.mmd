@@ -1,0 +1,75 @@
+%% DOCURA - Diagram 08 - Ambiguity Handling
+%% Critical rule: DOCURA must NOT choose the most likely option when several are reasonable (BR-003)
+%% Derived from: §1.13 FR-AMB-001 to 007, BR-003/004/009, EC-004, EC-006, EC-012, AC-US-010-1 to 5
+%% Node-to-requirement key: see the table in ambiguity-flow.md
+flowchart TB
+    c1["several candidate values<br/>or options are plausible"]
+    c2["confidence is below the<br/>automatic-action threshold"]
+    c3["source documents conflict<br/>on this attribute"]
+    c4["the required information<br/>is absent from the record"]
+
+    trigger{"DETECT AMBIGUITY<br/>any one of four conditions"}
+
+    halt["STOP AUTOMATIC ACTION HERE<br/>nothing placed, nothing selected"]
+
+    candidates{"Are there candidates<br/>to present?"}
+    reportonly["NOTHING TO CHOOSE BETWEEN — BR-009<br/>reported; nothing substituted"]
+
+    explain["EXPLAIN — field · candidates · sources ·<br/>why DOCURA could not decide"]
+    group["Grouped with other open questions"]
+    present["PRESENT THE CHOICES<br/>answerable without leaving the page"]
+
+    decide{"USER decides"}
+    pick["Picks one of the candidates"]
+    other["Supplies a value not offered"]
+    rejectall["Rejects every candidate"]
+    skip["Skips the question"]
+    cancel["Stops DOCURA entirely"]
+
+    record["RECORD — question and answer<br/>written to non-editable history"]
+    apply["APPLY — fill or select, marked<br/>as answered and traced to the user"]
+    sessiononly["Reused for the SAME question in<br/>the SAME session only"]
+
+    unresolved["LEFT UNFILLED — outstanding"]
+    reqchk{"Was it a<br/>required field?"}
+    firstitem["Listed FIRST and visually distinct"]
+    listed["Listed in the review summary"]
+
+    stopped(["Session ends — placed values REMAIN"])
+    cont(["Continue — one open question never<br/>blocks the rest of the session"])
+
+    c1 --> trigger
+    c2 --> trigger
+    c3 --> trigger
+    c4 --> trigger
+    trigger --> halt --> candidates
+    candidates -->|"no"| reportonly --> unresolved
+    candidates -->|"yes"| explain --> group --> present --> decide
+    decide --> pick
+    decide --> other
+    decide --> rejectall
+    decide --> skip
+    decide --> cancel
+    pick --> record
+    other --> record
+    rejectall --> unresolved
+    skip --> unresolved
+    cancel --> stopped
+    record --> apply --> sessiononly --> cont
+    unresolved --> reqchk
+    reqchk -->|"yes"| firstitem --> cont
+    reqchk -->|"no"| listed --> cont
+
+    classDef autoCls fill:#4FC8A5,stroke:#12604a,color:#0A0E13
+    classDef askCls fill:#E8A33D,stroke:#6b4408,color:#0A0E13
+    classDef consentCls fill:#9A8CF0,stroke:#3a2f7a,stroke-width:3px,color:#0A0E13
+    classDef failCls fill:#f6d6d6,stroke:#8a2b2b,stroke-width:2px,color:#0A0E13
+    classDef decCls fill:#fff5e0,stroke:#6b4408,color:#0A0E13
+    classDef userCls fill:#EFEAE0,stroke:#0A0E13,stroke-width:2px,color:#0A0E13
+
+    class apply,sessiononly,record,group autoCls
+    class explain,present,c1,c2,c3,c4 askCls
+    class halt consentCls
+    class reportonly,unresolved,firstitem,listed failCls
+    class trigger,candidates,decide,reqchk decCls
+    class pick,other,rejectall,skip,cancel,stopped,cont userCls

@@ -1,0 +1,28 @@
+# Local PostgreSQL for development and integration tests.
+#
+# No credential has a default here. Compose reads backend/.env (gitignored), so
+# set POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB there before starting; a
+# default password in a committed file is a credential in source control, and the
+# one that gets reused in a real environment.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: docura-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in backend/.env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in backend/.env}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in backend/.env}
+    ports:
+      # Host 5433 by default: 5432 is commonly already taken by another local
+      # Postgres. Override with DOCURA_PG_HOST_PORT.
+      - "${DOCURA_PG_HOST_PORT:-5433}:5432"
+    volumes:
+      - docura_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  docura_pgdata:

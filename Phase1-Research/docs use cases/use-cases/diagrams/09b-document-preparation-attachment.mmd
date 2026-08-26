@@ -1,0 +1,48 @@
+%% DOCURA - Diagram 09b - Document Matching, part 2: preparation, approval, attachment
+%% Continues from Diagram 09a. Derived from: FR-MATCH-006 to 010, FR-APR-003, BR-005, BR-007,
+%% BR-011, BR-013, BR-015, AR-DET-002, EC-011, EC-012, EC-020
+%% Node-to-requirement key: see document-matching-flow.md
+flowchart TB
+    chosen(["From Diagram 09a — a candidate<br/>document has been chosen"])
+
+    prepare["5 · PREPARE A COPY — convert, resize,<br/>compress and crop to the declared constraints.<br/>Deterministic, not inferred."]
+    original["THE STORED ORIGINAL IS NEVER MODIFIED —<br/>preparation always produces a copy, BR-013"]
+
+    quality{"Can the constraints be met without<br/>falling below the quality floor?"}
+    degrade["EC-020 · ATTACH NOTHING — explain why,<br/>and offer the original for the user<br/>to handle manually"]
+
+    preview["6 · PREVIEW — show exactly the file<br/>that will be attached"]
+    sensq{"Is the document<br/>classified SENSITIVE?"}
+
+    approval["EXPLICIT PER-INSTANCE APPROVAL — BR-005 / BR-007<br/>this document, this field, this form, this<br/>session. Never inherited or remembered."]
+    granted{"USER approves?"}
+
+    denied["EC-011 / EC-012 · DENIED — the field is left<br/>empty, the denial is recorded, the document<br/>is not proposed again for this field"]
+    remaining{"Do other candidates<br/>remain?"}
+    backto(["Return to the choice in Diagram 09a"])
+    missing(["Reported as outstanding at review —<br/>THE SESSION CONTINUES"])
+
+    attach["7 · ATTACH THE PREPARED COPY — visibly<br/>marked and individually reversible"]
+    logit(["Recorded in history — the document attached<br/>and the field that received it"])
+
+    chosen --> prepare --> original --> quality
+    quality -->|"no"| degrade --> missing
+    quality -->|"yes"| preview --> sensq
+    sensq -->|"no — routine"| attach
+    sensq -->|"yes"| approval --> granted
+    granted -->|"yes"| attach --> logit
+    granted -->|"no"| denied --> remaining
+    remaining -->|"yes"| backto
+    remaining -->|"no"| missing
+
+    classDef autoCls fill:#4FC8A5,stroke:#12604a,color:#0A0E13
+    classDef askCls fill:#E8A33D,stroke:#6b4408,color:#0A0E13
+    classDef consentCls fill:#9A8CF0,stroke:#3a2f7a,stroke-width:3px,color:#0A0E13
+    classDef failCls fill:#f6d6d6,stroke:#8a2b2b,stroke-width:2px,color:#0A0E13
+    classDef decCls fill:#fff5e0,stroke:#6b4408,color:#0A0E13
+
+    class prepare,original,preview,attach,logit,chosen autoCls
+    class backto askCls
+    class approval consentCls
+    class degrade,denied,missing failCls
+    class quality,sensq,granted,remaining decCls

@@ -1,0 +1,57 @@
+%% DOCURA - Diagram 04a - Document Lifecycle, part 1: intake and understanding
+%% Derived from: Step 3 §7 Table 7.1, §1.3 FR-UPL, §1.4 FR-OCR, §1.5 FR-INF, EC-001 to EC-004
+%% Continues in Diagram 04b. Node-to-requirement key: see document-lifecycle.md
+flowchart TB
+    pick(["USER selects one or more files"])
+    validate{"Type, size and<br/>integrity valid?"}
+    reject["REJECT before upload — reason<br/>and accepted types stated"]
+    dupe{"Duplicates a<br/>stored document?"}
+    askdupe["ASK — keep both, replace, or version"]
+    queued["Status · queued<br/>interrupted uploads retry in place"]
+    processing["Status · processing — asynchronous,<br/>the user is never blocked"]
+
+    ocr{"Text extraction<br/>succeeds?"}
+    ocrfail["EC-001 · failed — ORIGINAL RETAINED,<br/>retry and manual entry offered"]
+
+    classify{"Type determined<br/>confidently?"}
+    unclass["EC-003 · unclassified — no type<br/>assumed, the USER identifies it"]
+    extract["Extract the field set for that type,<br/>with per-field confidence"]
+
+    conf{"Every value above<br/>the review threshold?"}
+    needsreview["EC-002 · needs review — low-confidence<br/>values WITHHELD from automatic use"]
+
+    conflict{"Documents disagree<br/>on one attribute?"}
+    raiseconf["EC-004 · conflict — NEITHER value<br/>authoritative; DOCURA never resolves it"]
+    usercorrect["USER corrects or resolves — the<br/>correction survives reprocessing"]
+
+    ready(["Status · ready — structured record updated,<br/>every value linked to its source<br/>continues in Diagram 04b"])
+
+    pick --> validate
+    validate -->|"no"| reject
+    validate -->|"yes"| dupe
+    dupe -->|"yes"| askdupe --> queued
+    dupe -->|"no"| queued
+    queued --> processing --> ocr
+    ocr -->|"no"| ocrfail
+    ocrfail -->|"retry"| processing
+    ocrfail -->|"manual entry"| ready
+    ocr -->|"yes"| classify
+    classify -->|"no"| unclass --> extract
+    classify -->|"yes"| extract --> conf
+    conf -->|"no"| needsreview --> usercorrect
+    conf -->|"yes"| conflict
+    conflict -->|"yes"| raiseconf --> usercorrect
+    conflict -->|"no"| ready
+    usercorrect --> ready
+
+    classDef autoCls fill:#4FC8A5,stroke:#12604a,color:#0A0E13
+    classDef askCls fill:#E8A33D,stroke:#6b4408,color:#0A0E13
+    classDef failCls fill:#f6d6d6,stroke:#8a2b2b,stroke-width:2px,color:#0A0E13
+    classDef userCls fill:#EFEAE0,stroke:#0A0E13,stroke-width:2px,color:#0A0E13
+    classDef decCls fill:#fff5e0,stroke:#6b4408,color:#0A0E13
+
+    class processing,extract,ready autoCls
+    class askdupe,needsreview,raiseconf,unclass,usercorrect askCls
+    class reject,ocrfail failCls
+    class pick,queued userCls
+    class validate,dupe,ocr,classify,conf,conflict decCls

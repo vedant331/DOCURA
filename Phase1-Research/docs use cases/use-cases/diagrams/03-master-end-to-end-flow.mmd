@@ -1,0 +1,57 @@
+%% DOCURA - Diagram 03 - Master End-to-End MVP Flow
+%% Covers Step 3 §10.1 demonstration journey D1 to D14 at one level of detail.
+%% Detail is delegated, not duplicated: Diagram 04 expands D1-D3, Diagram 06 expands D7.
+%% Node-to-requirement key: see the table in master-user-flow.md
+%% Colour key: teal = DOCURA acts | amber = user decides | violet = consent boundary
+flowchart TB
+    start(["USER has documents and<br/>an application to complete"])
+    d1["D1 to D3 · Build the record — upload, OCR,<br/>classify, extract, review, correct<br/>see Diagram 04"]
+    d4["D4 · USER activates DOCURA<br/>on the open mock form"]
+    d5["D5 / D6 · Detect the form, enumerate fields,<br/>show the readiness summary"]
+    missing{"Required document<br/>missing?"}
+    tellmissing["Reported missing<br/>BEFORE filling begins"]
+    d7["D7 · Interpret every field —<br/>meaning · confidence · sensitivity"]
+    perfield{"Per field — which tier?<br/>see Diagram 06"}
+    certain["D7 / D8 / D10 · ACT<br/>fill · select option · attach document"]
+    ambig["D9 · AMBIGUOUS — ask"]
+    sens["D11 · SENSITIVE — ask approval"]
+    legal["D12 · CONSEQUENTIAL — never touched"]
+    unknownf["UNKNOWN — left alone, reported"]
+    answered["USER answers, approves,<br/>denies, or skips"]
+    d13["D13 · Review summary<br/>outstanding items first"]
+    fixq{"USER wants to<br/>change anything?"}
+    edit["USER edits — never overwritten again"]
+    d14["D14 · DOCURA STOPS"]
+    submit(["USER SUBMITS<br/>DOCURA DOES NOT SUBMIT"])
+
+    start --> d1 --> d4 --> d5 --> missing
+    missing -->|"yes"| tellmissing --> d7
+    missing -->|"no"| d7 --> perfield
+    perfield -->|"certain and routine"| certain
+    perfield -->|"two or more plausible"| ambig
+    perfield -->|"sensitive"| sens
+    perfield -->|"declaration"| legal
+    perfield -->|"unknown"| unknownf
+    ambig --> answered
+    sens --> answered
+    answered --> certain
+    certain --> d13
+    legal --> d13
+    unknownf --> d13
+    d13 --> fixq
+    fixq -->|"yes"| edit --> d13
+    fixq -->|"no"| d14 --> submit
+
+    classDef autoCls fill:#4FC8A5,stroke:#12604a,color:#0A0E13
+    classDef askCls fill:#E8A33D,stroke:#6b4408,color:#0A0E13
+    classDef consentCls fill:#9A8CF0,stroke:#3a2f7a,stroke-width:3px,color:#0A0E13
+    classDef userCls fill:#EFEAE0,stroke:#0A0E13,stroke-width:2px,color:#0A0E13
+    classDef decCls fill:#fff5e0,stroke:#6b4408,color:#0A0E13
+    classDef failCls fill:#f6d6d6,stroke:#8a2b2b,stroke-width:2px,color:#0A0E13
+
+    class d1,d5,d7,certain autoCls
+    class ambig,answered askCls
+    class sens,legal,d14,submit consentCls
+    class start,d4,edit userCls
+    class missing,perfield,fixq decCls
+    class tellmissing,unknownf failCls

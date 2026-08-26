@@ -1,0 +1,43 @@
+%% DOCURA - Diagram 11 - Legal Declaration and Consent Flow
+%% BR-006 is non-negotiable: DOCURA never accepts a declaration, agreement, or consent control.
+%% Derived from: FR-FLD-004, FR-DRP-007, FR-APR-005, FR-REV-005, BR-006, BR-020, AR-DET-006
+flowchart TB
+    scan["DOCURA enumerates the form fields"]
+
+    det1["DETERMINISTIC RULES detect declaration<br/>and consent controls"]
+    det2["Assisted interpretation may ADD the<br/>classification, never remove it"]
+
+    isconsq{"Declaration, agreement,<br/>or consent control?"}
+    routine["Normal field flow — Diagram 06"]
+
+    mark["CLASSIFY CONSEQUENTIAL — never<br/>lowered by any actor, BR-020"]
+
+    stop["DOCURA DOES NOT ACT — BR-006<br/>no tick, select, sign, accept, or pre-fill"]
+
+    nosetting["NO SETTING EXISTS TO AUTOMATE IT<br/>AC-US-013-2"]
+
+    inform["INFORM — the control is shown, with<br/>what it asks them to agree to"]
+
+    reviewlist["AT REVIEW — listed as requiring the<br/>user, and left uncompleted"]
+
+    useract(["THE USER ACTS THEMSELVES — reading,<br/>deciding and agreeing are theirs"])
+
+    outcome{"USER decides"}
+    agreed(["USER agrees — recorded as a user action"])
+    notagreed(["USER declines — stays outstanding"])
+
+    scan --> det1 --> det2 --> isconsq
+    isconsq -->|"no"| routine
+    isconsq -->|"yes"| mark --> stop --> nosetting --> inform --> reviewlist --> useract --> outcome
+    outcome -->|"agrees"| agreed
+    outcome -->|"declines or defers"| notagreed
+
+    classDef autoCls fill:#4FC8A5,stroke:#12604a,color:#0A0E13
+    classDef consentCls fill:#9A8CF0,stroke:#3a2f7a,stroke-width:3px,color:#0A0E13
+    classDef userCls fill:#EFEAE0,stroke:#0A0E13,stroke-width:2px,color:#0A0E13
+    classDef decCls fill:#fff5e0,stroke:#6b4408,color:#0A0E13
+
+    class scan,det1,det2,routine autoCls
+    class mark,stop,nosetting,inform,reviewlist consentCls
+    class useract,agreed,notagreed userCls
+    class isconsq,outcome decCls

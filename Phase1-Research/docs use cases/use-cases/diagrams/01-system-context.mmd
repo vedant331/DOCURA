@@ -1,0 +1,74 @@
+%% DOCURA - Diagram 01 - System Context
+%% Derived from: Step 3 §6 (three automation layers), §1.8-1.19, §9; Step 1 §03
+%% Node-to-requirement key is given in the caption table of actors-and-boundaries.md
+flowchart LR
+    user(["USER"])
+
+    subgraph docura["DOCURA - SYSTEM BOUNDARY"]
+        direction TB
+        subgraph app["DOCURA (application)"]
+            direction TB
+            acct["Account and Session"]
+            vault["Document Vault"]
+            docint["Document Intelligence"]
+            record["Structured Record"]
+            findr["Search and Retrieval"]
+            audit["History and Audit"]
+            acct --> vault --> docint --> record
+            record --> findr
+            record --> audit
+        end
+        subgraph extn["DOCURA Extension"]
+            direction TB
+            gate["Activation Gate"]
+            formint["Form Intelligence"]
+            policy["Decision and Policy Engine"]
+            exec["Action Executor"]
+            ask["Prompt Surface"]
+            gate --> formint --> policy
+            policy -->|"act"| exec
+            policy -->|"ask"| ask
+        end
+    end
+
+    browser["Web Browser"]
+    form["EXTERNAL FORM<br/>mock MCA-style form"]
+
+    subgraph outside["Off-stage and out of MVP boundary"]
+        direction TB
+        ops["Product and Operations"]
+        secrev["Security Reviewer"]
+        locker["Locker / Cloud / Email"]
+        delegate["Delegate"]
+    end
+
+    user -->|"sign in, upload,<br/>correct, search"| acct
+    user -->|"activate on<br/>this page"| gate
+    user -->|"answer, approve,<br/>deny, stop"| ask
+    user ==>|"SUBMITS"| form
+
+    browser --> gate
+    policy -->|"read record"| record
+    formint -->|"read page structure"| form
+    exec -->|"fill, select, attach"| form
+    exec --> audit
+    ask --> audit
+
+    ops -.->|"thresholds, metrics"| policy
+    secrev -.->|"pre-release review"| acct
+    locker -.->|"FUTURE import"| vault
+    delegate -.->|"FUTURE access"| acct
+
+    classDef userCls fill:#EFEAE0,stroke:#0A0E13,stroke-width:3px,color:#0A0E13
+    classDef autoCls fill:#4FC8A5,stroke:#12604a,color:#0A0E13
+    classDef askCls fill:#E8A33D,stroke:#6b4408,color:#0A0E13
+    classDef consentCls fill:#9A8CF0,stroke:#3a2f7a,stroke-width:3px,color:#0A0E13
+    classDef extCls fill:#d9dee6,stroke:#0A0E13,color:#0A0E13
+    classDef futureCls fill:#f4f4f5,stroke:#9aa1ad,stroke-dasharray: 4\,3,color:#5b6270
+
+    class user userCls
+    class exec,docint autoCls
+    class ask,policy askCls
+    class form consentCls
+    class browser extCls
+    class ops,secrev,locker,delegate futureCls

@@ -1,0 +1,63 @@
+%% DOCURA - Diagram 07 - Dropdown, Radio and Checkbox Decision Flow
+%% Worked example: a "Department" dropdown showing "[ Select ]"
+%% Derived from: §1.12 FR-DRP-001 to 008, BR-001/003/006/009, EC-006, EC-007, AC-US-009-1 to 5
+%% Node-to-requirement key: see dropdown-flow.md
+flowchart TB
+    field(["Dropdown, radio group, or checkbox<br/>example · Department  [ Select ]"])
+    understand["1 · UNDERSTAND THE FIELD — its meaning,<br/>with a confidence and an explicit unknown"]
+    kind{"What kind of control,<br/>and which tier?"}
+    consq["CONSEQUENTIAL CHECKBOX — BR-006<br/>never set at any confidence level"]
+    unknownf["UNKNOWN — BR-009 · left unset and reported"]
+
+    readopts["2 · READ EVERY AVAILABLE OPTION<br/>before attempting any match"]
+    dependent{"Do these options depend<br/>on another field?"}
+    reread["Re-read the list after its<br/>controlling field changes"]
+
+    compare["3 · COMPARE WITH THE RECORD — match by<br/>MEANING, not by exact string equality"]
+    score["4 · EVALUATE CONFIDENCE — a ranked<br/>candidate list, never one forced answer"]
+    count{"5 · How many options are at or above<br/>the automatic-action threshold?"}
+
+    routineq{"Is the field routine?"}
+    sensitive["SENSITIVE — per-instance approval, showing<br/>the value and the receiving field"]
+    approved{"USER approves?"}
+    select["SELECT THE OPTION — marked DOCURA-selected,<br/>source recorded, page handlers fired"]
+
+    many["EC-006 · TWO OR MORE PLAUSIBLE —<br/>select NOTHING. BR-003 forbids choosing<br/>the most likely candidate."]
+    askuser["ASK — present each candidate with the<br/>reason it was considered"]
+    chosen{"USER chooses?"}
+
+    none["EC-007 · NO ACCEPTABLE MATCH —<br/>leave the field unset, BR-009"]
+    offerlist["Report it as needing attention, and offer<br/>the option list for a direct choice"]
+    skipped(["Left unset, recorded as outstanding,<br/>and listed first at review"])
+
+    field --> understand --> kind
+    kind -->|"consequential checkbox"| consq
+    kind -->|"meaning not determined"| unknownf
+    kind -->|"dropdown, radio, or<br/>routine checkbox"| readopts --> dependent
+    dependent -->|"yes"| reread --> compare
+    dependent -->|"no"| compare --> score --> count
+    count -->|"exactly one"| routineq
+    count -->|"two or more"| many --> askuser --> chosen
+    count -->|"none"| none --> offerlist
+    routineq -->|"yes"| select
+    routineq -->|"no — sensitive"| sensitive --> approved
+    approved -->|"yes"| select
+    approved -->|"no"| skipped
+    chosen -->|"picks a candidate<br/>or supplies another value"| select
+    chosen -->|"skips"| skipped
+    offerlist -->|"picks from the list"| select
+    offerlist -->|"skips"| skipped
+
+    classDef autoCls fill:#4FC8A5,stroke:#12604a,color:#0A0E13
+    classDef askCls fill:#E8A33D,stroke:#6b4408,color:#0A0E13
+    classDef consentCls fill:#9A8CF0,stroke:#3a2f7a,stroke-width:3px,color:#0A0E13
+    classDef failCls fill:#f6d6d6,stroke:#8a2b2b,stroke-width:2px,color:#0A0E13
+    classDef decCls fill:#fff5e0,stroke:#6b4408,color:#0A0E13
+    classDef userCls fill:#EFEAE0,stroke:#0A0E13,stroke-width:2px,color:#0A0E13
+
+    class understand,readopts,reread,compare,score,select autoCls
+    class many,askuser,offerlist askCls
+    class consq,sensitive consentCls
+    class unknownf,none,skipped failCls
+    class kind,dependent,count,routineq,approved,chosen decCls
+    class field userCls

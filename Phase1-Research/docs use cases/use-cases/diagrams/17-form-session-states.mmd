@@ -1,0 +1,69 @@
+%% DOCURA - Diagram 17 - Form Session State Machine
+%% What the extension is permitted to do in each state.
+%% Derived from: FR-EXT-003 to 007, FR-FRM-006/007, FR-SUB-001 to 004, BR-008, BR-014, EC-014 to EC-018
+stateDiagram-v2
+    direction TB
+    [*] --> Dormant
+
+    state Dormant {
+        [*] --> NotReading
+        NotReading : Reads nothing. Logs nothing.
+        NotReading : Transmits nothing. No indicator.
+    }
+    note right of Dormant
+        BR-014 — there is no passive or
+        background observation. Dormant is
+        the state on EVERY page until the
+        user activates DOCURA on that page.
+    end note
+
+    Dormant --> Activated : USER activates DOCURA on this page
+    Activated --> Dormant : USER navigates away or closes the page
+
+    state Activated {
+        [*] --> Detecting
+        Detecting --> NoFormFound : no fillable form on the page
+        Detecting --> Interpreting : form detected and fields enumerated
+        Interpreting --> Working : meanings and sensitivity tiers assigned
+        Working --> Waiting : an ambiguity or approval is outstanding
+        Waiting --> Working : USER answers, approves, denies, or skips
+        Working --> Remapping : the form changed or fields were added
+        Remapping --> Working : stale mappings discarded and the form re-read
+        Working --> Reviewing : no fields left to process
+        NoFormFound --> Detecting : USER re-activates after the page changes
+    }
+
+    Activated --> Stopped : USER stops DOCURA
+    Activated --> Degraded : network loss mid-session — EC-014
+    Activated --> Expired : session expires mid-form — EC-016
+    Activated --> Abandoned : USER submits while DOCURA is mid-action — EC-018
+
+    Degraded --> Activated : USER explicitly resumes
+    Expired --> Activated : USER re-authenticates, then re-activates
+
+    Stopped : All activity ceases at once.
+    Stopped : Values already placed REMAIN.
+    Stopped : Nothing is reverted or cleaned up.
+    Stopped : No resume without a FRESH activation.
+
+    Degraded : Initiates no new actions.
+    Degraded : Preserves everything already placed.
+    Degraded : Shows a clear degraded state.
+    Degraded : Never leaves a field half-filled.
+
+    Expired : Halts all automated action immediately.
+    Expired : Nothing is filled from a stale session.
+
+    Abandoned : Pending action is abandoned,
+    Abandoned : never applied to a submitted form.
+
+    Activated --> HandedBack : review complete
+    HandedBack : DOCURA STOPS — BR-008.
+    HandedBack : It states that submission is the user's.
+    HandedBack : It never operates the submit control.
+    HandedBack : Hand-back is recorded; whether the user
+    HandedBack : submitted is NOT claimed either way.
+
+    HandedBack --> [*] : USER SUBMITS
+    Stopped --> [*]
+    Abandoned --> [*]

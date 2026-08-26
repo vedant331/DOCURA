@@ -1,0 +1,66 @@
+%% DOCURA - Diagram 02 - Actor / Use Case Overview
+%% All 28 MVP use cases grouped into nine clusters. Future use cases shown dashed.
+%% Derived from: Step 3 §1 module structure and §10.1 demonstration journey D1-D14
+flowchart LR
+    user(["USER<br/>primary actor"])
+
+    subgraph vaultphase["PHASE 1 - The record (DOCURA application)"]
+        direction TB
+        ca["A · Account and record control<br/>UC-001 UC-003 UC-004 UC-005 UC-028"]
+        cb["B · Building the record<br/>UC-006 UC-007 UC-008 UC-009 UC-010 UC-011"]
+        cc["C · Finding things<br/>UC-012"]
+    end
+
+    subgraph formphase["PHASE 2 - The form session (DOCURA Extension)"]
+        direction TB
+        cd["D · Starting a session<br/>UC-002 UC-013 UC-014 UC-015"]
+        ce["E · Understanding the form<br/>UC-016"]
+        cf["F · Acting on certainty<br/>UC-017 UC-018 UC-020"]
+        cg["G · Asking the user<br/>UC-019 UC-021 UC-022"]
+        ch["H · User control<br/>UC-023 UC-024"]
+        ci["I · Closing the session<br/>UC-025 UC-026 UC-027"]
+    end
+
+    docint["Document Intelligence<br/>supporting"]
+    formint["Form Intelligence<br/>supporting"]
+    form["EXTERNAL FORM<br/>external"]
+
+    subgraph futurecl["FUTURE - not in MVP"]
+        direction TB
+        fut1["UC-029 to UC-032 · capture, import,<br/>remembered answers, receipts"]
+        fut2["UC-033 to UC-037 · delegation, NL search,<br/>bulk approval, 2FA, contexts"]
+        fut3["UC-038 to UC-041 · learning, mobile,<br/>custom widgets, frames"]
+    end
+
+    user --> ca
+    user --> cb
+    user --> cc
+    user --> cd
+    user --> cg
+    user --> ch
+    user --> ci
+    user ==>|"UC-026 hand-back then<br/>USER SUBMITS"| form
+
+    cb -.->|"reads and classifies"| docint
+    ce -.->|"interprets fields"| formint
+    cf -.->|"ranks candidates"| formint
+    cf -->|"places values, selects,<br/>attaches"| form
+    cd -->|"reads structure<br/>after activation"| form
+
+    ca -.- futurecl
+
+    classDef userCls fill:#EFEAE0,stroke:#0A0E13,stroke-width:3px,color:#0A0E13
+    classDef autoCls fill:#4FC8A5,stroke:#12604a,color:#0A0E13
+    classDef askCls fill:#E8A33D,stroke:#6b4408,color:#0A0E13
+    classDef consentCls fill:#9A8CF0,stroke:#3a2f7a,stroke-width:3px,color:#0A0E13
+    classDef plainCls fill:#EFEAE0,stroke:#0A0E13,color:#0A0E13
+    classDef supCls fill:#d9dee6,stroke:#0A0E13,color:#0A0E13
+    classDef futureCls fill:#f4f4f5,stroke:#9aa1ad,stroke-dasharray: 4\,3,color:#5b6270
+
+    class user userCls
+    class cf autoCls
+    class cg askCls
+    class ch,ci,form consentCls
+    class ca,cb,cc,cd,ce plainCls
+    class docint,formint supCls
+    class fut1,fut2,fut3 futureCls

@@ -1,0 +1,42 @@
+%% DOCURA - Diagram 09a - Document Matching, part 1: requirement to chosen candidate
+%% Derived from: FR-MATCH-001 to 005, FR-DOC-005/006, BR-001, BR-003, BR-009, EC-005, EC-012
+%% Continues in Diagram 09b. Node-to-requirement key: see document-matching-flow.md
+flowchart TB
+    upload(["File-upload field detected on the form"])
+    requirement["1 · DETERMINE THE REQUIREMENT — which<br/>document is this slot asking for, and what<br/>format, size and dimensions does it declare?"]
+    searchvault["2 · SEARCH THE VAULT — every stored document<br/>that could satisfy the requirement"]
+    rank["3 · RANK THE CANDIDATES — with confidences.<br/>Never a single forced answer."]
+    count{"4 · How many candidates are at or above<br/>the automatic-action threshold?"}
+
+    nomatch["EC-005 · NO MATCH — BR-009 · report the<br/>document as MISSING. Never substitute<br/>a different document."]
+    reportmissing(["Named in the readiness summary before<br/>filling begins, and again at review"])
+
+    multiple["TWO OR MORE PLAUSIBLE — BR-003<br/>attach NOTHING"]
+    askchoose["ASK THE USER TO CHOOSE — each candidate<br/>identified clearly enough to tell them apart<br/>(provisional vs final, attested vs plain)"]
+    userpick{"USER picks one?"}
+
+    validq{"Is it the right one — correct version,<br/>not superseded, not the wrong type?"}
+    notauto["A wrong, expired or superseded document<br/>is NEVER used automatically —<br/>the choice returns to the user"]
+
+    chosen(["Candidate chosen —<br/>continues in Diagram 09b"])
+
+    upload --> requirement --> searchvault --> rank --> count
+    count -->|"none"| nomatch --> reportmissing
+    count -->|"two or more"| multiple --> askchoose --> userpick
+    userpick -->|"no — skips"| reportmissing
+    userpick -->|"yes"| validq
+    count -->|"exactly one"| validq
+    validq -->|"no"| notauto --> askchoose
+    validq -->|"yes"| chosen
+
+    classDef autoCls fill:#4FC8A5,stroke:#12604a,color:#0A0E13
+    classDef askCls fill:#E8A33D,stroke:#6b4408,color:#0A0E13
+    classDef failCls fill:#f6d6d6,stroke:#8a2b2b,stroke-width:2px,color:#0A0E13
+    classDef decCls fill:#fff5e0,stroke:#6b4408,color:#0A0E13
+    classDef userCls fill:#EFEAE0,stroke:#0A0E13,stroke-width:2px,color:#0A0E13
+
+    class requirement,searchvault,rank,chosen autoCls
+    class multiple,askchoose,notauto askCls
+    class nomatch,reportmissing failCls
+    class count,userpick,validq decCls
+    class upload userCls

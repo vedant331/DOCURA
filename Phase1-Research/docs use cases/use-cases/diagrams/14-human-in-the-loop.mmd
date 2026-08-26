@@ -1,0 +1,51 @@
+%% DOCURA - Diagram 14 - Human-in-the-Loop Map
+%% Every point at which a human decision is required by design.
+%% Derived from: Step 3 §6.4 Table 6.2 (H1-H4, S1) plus BR-008 (S2).
+%% These are not error paths - they are the product working correctly.
+flowchart TB
+    subgraph legend["LEGEND"]
+        direction LR
+        lg1["AUTOMATED ACTION<br/>DOCURA acts alone"]
+        lg2["USER DECISION<br/>DOCURA prepares, the user decides"]
+        lg3["MANDATORY STOP<br/>automation structurally excluded"]
+    end
+
+    a1["Read, OCR, classify · extract values<br/>· score confidence · detect conflicts"]
+    h1["H1 · EXTRACTION REVIEW — BR-002<br/>any value below the review threshold<br/>UC-008"]
+    h2["H2 · CONFLICT RESOLUTION — BR-004<br/>documents disagree on one attribute<br/>UC-009"]
+    rec[("THE STRUCTURED RECORD")]
+
+    a2["Enumerate fields · interpret meaning<br/>· classify sensitivity · rank candidates"]
+    h3["H3 · AMBIGUITY ANSWER — BR-003<br/>several plausible values, options,<br/>or documents · UC-019"]
+    h4["H4 · SENSITIVE DISCLOSURE — BR-005 / BR-007<br/>per instance, never inherited · UC-021"]
+    s1["S1 · DECLARATION AND CONSENT — BR-006<br/>any consequential control.<br/>No setting can enable it. · UC-022"]
+
+    a3["Fill routine fields above threshold ·<br/>select one confident option ·<br/>prepare and attach a document"]
+    a4["Normalise formats · mark every action ·<br/>record it in history"]
+
+    o1["USER MAY INTERVENE AT ANY TIME<br/>edit or clear any filled value — BR-012 / BR-015<br/>or stop DOCURA — UC-023, UC-024"]
+
+    rev["Review summary — outstanding first"]
+    s2["S2 · FINAL SUBMISSION — BR-008<br/>always. Under no confidence level,<br/>setting, or preference. · UC-026"]
+    outcome(["USER SUBMITS"])
+
+    a1 --> rec
+    a1 -.->|"below threshold"| h1 --> rec
+    a1 -.->|"disagreement"| h2 --> rec
+    rec --> a2
+    a2 -.->|"two or more plausible"| h3 --> a3
+    a2 -.->|"tier is sensitive"| h4 --> a3
+    a2 -.->|"tier is consequential"| s1 --> rev
+    a2 -->|"certain and routine"| a3 --> a4 --> rev
+    o1 -.-> a3
+    rev --> s2 ==> outcome
+
+    classDef autoCls fill:#4FC8A5,stroke:#12604a,color:#0A0E13
+    classDef askCls fill:#E8A33D,stroke:#6b4408,stroke-width:2px,color:#0A0E13
+    classDef consentCls fill:#9A8CF0,stroke:#3a2f7a,stroke-width:3px,color:#0A0E13
+    classDef userCls fill:#EFEAE0,stroke:#0A0E13,stroke-width:2px,color:#0A0E13
+
+    class a1,a2,a3,a4,rec,rev,lg1 autoCls
+    class h1,h2,h3,h4,lg2 askCls
+    class s1,s2,lg3 consentCls
+    class o1,outcome userCls

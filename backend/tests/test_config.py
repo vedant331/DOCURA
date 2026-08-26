@@ -1,0 +1,158 @@
+"""Configuration loading, validation, and secret handling."""
+
+from __future__ import annotations
+
+import pytest
+from pydantic import SecretStr, ValidationError
+
+from app.core.config import (
+    ConfigurationError,
+    Environment,
+    LogLevel,
+    Settings,
+    get_settings,
+    load_settings,
+)
+from tests.conftest import TEST_DSN
+
+
+class TestRequiredValues:
+    def test_loads_from_environment(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("DOCURA_DATABASE_URL", TEST_DSN)
+        monkeypatch.setenv("DOCURA_ENVIRONMENT", "staging")
+        monkeypatch.setenv("DOCURA_LOG_LEVEL", "WARNING")
+
+        loaded = load_settings()
+
+        assert loaded.environment is Environment.STAGING
+        assert loaded.log_level is LogLevel.WARNING
+        assert loaded.database_url.get_secret_value() == TEST_DSN
+
+    def test_missing_database_url_is_a_configuration_error(self) -> None:
+        with pytest.raises(ConfigurationError) as exc_info:
+            load_settings()
+
+        message = str(exc_info.value)
+        assert "DOCURA_DATABASE_URL" in message
+        assert "Invalid configuration" in message
+
+    def test_no_secret_has_a_default(self) -> None:
+        """A credential with a default is a credential in source control."""
+        assert Settings.model_fields["database_url"].is_required()
+
+
+class TestValidation:
+    @pytest.mark.parametrize(
+        "dsn",
+        [
+            "not-a-url",
+            "mysql://user:pass@localhost:3306/docura",
+            "postgresql://user:pass@localhost:5432/",
+            "",
+        ],
+    )
+    def test_rejects_unusable_dsn(self, dsn: str) -> None:
+        with pytest.raises(ValidationError):
+            Settings(environment=Environment.TEST, database_url=dsn)
+
+    def test_rejects_wildcard_cors_origin(self) -> None:
+        with pytest.raises(ValidationError, match="explicit allowlist"):
+            Settings(
+                environment=Environment.TEST,
+                database_url=TEST_DSN,
+                cors_allow_origins=("https://app.docura.test", "*"),
+            )
+
+    def test_rejects_unknown_docura_variable(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A typo must fail startup, not silently leave a default in place."""
+        monkeypatch.setenv("DOCURA_DATABASE_URL", TEST_DSN)
+        monkeypatch.setenv("DOCURA_DATABSE_POOL_SIZE", "20")
+
+        with pytest.raises(ConfigurationError):
+            load_settings()
+
+    @pytest.mark.parametrize("port", [0, 70000])
+    def test_rejects_out_of_range_port(self, port: int) -> None:
+        with pytest.raises(ValidationError):
+            Settings(
+                environment=Environment.TEST,
+                database_url=TEST_DSN,
+                port=port,
+            )
+
+
+class TestSecretHandling:
+    def test_password_absent_from_repr_and_str(self, settings: Settings) -> None:
+        assert "test_password" not in repr(settings)
+        assert "test_password" not in str(settings)
+        assert "test_password" not in repr(settings.database_url)
+
+    def test_password_absent_from_model_dump(self, settings: Settings) -> None:
+        assert "test_password" not in str(settings.model_dump())
+
+    def test_display_url_drops_credentials(self, settings: Settings) -> None:
+        display = settings.database_display_url
+
+        assert "test_password" not in display
+        assert "test_user" not in display
+        assert "localhost:5432" in display
+        assert "docura_test" in display
+
+    def test_configuration_error_never_echoes_the_secret(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("DOCURA_DATABASE_URL", "mysql://real_user:hunter2@db.internal:3306/prod")
+
+        with pytest.raises(ConfigurationError) as exc_info:
+            load_settings()
+
+        assert "hunter2" not in str(exc_info.value)
+        assert "real_user" not in str(exc_info.value)
+
+
+class TestDerivedValues:
+    def test_async_driver_is_applied(self, settings: Settings) -> None:
+        assert settings.async_database_url.startswith("postgresql+asyncpg://")
+
+    def test_async_driver_is_not_doubled(self) -> None:
+        already_async = Settings(
+            environment=Environment.TEST,
+            database_url=SecretStr(TEST_DSN.replace("postgresql://", "postgresql+asyncpg://")),
+        )
+        assert already_async.async_database_url.count("asyncpg") == 1
+
+    @pytest.mark.parametrize(
+        ("environment", "expected"),
+        [
+            (Environment.LOCAL, False),
+            (Environment.TEST, False),
+            (Environment.STAGING, True),
+            (Environment.PRODUCTION, True),
+        ],
+    )
+    def test_json_logs_default_by_environment(
+        self, environment: Environment, expected: bool
+    ) -> None:
+        loaded = Settings(environment=environment, database_url=TEST_DSN)
+        assert loaded.render_json_logs is expected
+
+    def test_log_json_override_wins(self) -> None:
+        loaded = Settings(
+            environment=Environment.PRODUCTION,
+            database_url=TEST_DSN,
+            log_json=False,
+        )
+        assert loaded.render_json_logs is False
+
+    def test_production_hides_error_detail(self) -> None:
+        production = Settings(
+            environment=Environment.PRODUCTION,
+            database_url=TEST_DSN,
+        )
+        assert production.expose_error_detail is False
+
+
+class TestSingleton:
+    def test_get_settings_is_cached(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("DOCURA_DATABASE_URL", TEST_DSN)
+        assert get_settings() is get_settings()

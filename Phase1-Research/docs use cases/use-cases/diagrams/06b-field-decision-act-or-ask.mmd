@@ -1,0 +1,46 @@
+%% DOCURA - Diagram 06b - Autofill Decision Flow, part 2: CONFIDENCE, SENSITIVITY, ACT OR ASK, VERIFY
+%% Continues from Diagram 06a, which has already cleared the four gates.
+%% Derived from: BR-001/003/005/007/010/011/012/015, FR-FILL-001 to 008, FR-SENS-002/003, FR-APR-001 to 003
+%% Node-to-requirement key: see autofill-decision-flow.md
+flowchart TB
+    fromA(["From Diagram 06a — the field is understood,<br/>a candidate exists, and it is above the floor"])
+
+    conf{"CONFIDENCE CHECK — BR-001<br/>exactly ONE candidate at or above the<br/>automatic-action threshold?"}
+    ambiguous["AMBIGUOUS — BR-003 · DOCURA must not<br/>pick the most likely. See Diagram 08."]
+
+    sens{"SENSITIVITY CHECK — FR-FLD-003<br/>which tier is this field?"}
+    approve["ASK FOR APPROVAL — BR-005 / BR-007<br/>show the exact value and the receiving field.<br/>Per instance; never inherited."]
+    ask["ASK THE USER — the field, the candidates,<br/>each source, and why it could not decide"]
+
+    granted{"USER approves<br/>or answers?"}
+    denied["DENIED or SKIPPED — the field is left<br/>untouched, the decision is recorded,<br/>and the session continues"]
+
+    act["ACT — place the value, reformatted to satisfy<br/>the declared constraints without<br/>changing its meaning"]
+    meaningq{"Would reformatting<br/>change the meaning?"}
+
+    ver["VERIFY — mark it DOCURA-filled and<br/>distinguishable, attach its source document,<br/>fire the page input handlers, record the action"]
+    reversible(["REVERSIBLE — BR-012 / BR-015 · the user may<br/>change or clear it, and DOCURA<br/>never overwrites it again"])
+    outstanding(["Listed in the review summary<br/>as outstanding"])
+
+    fromA --> conf
+    conf -->|"no — two or more"| ambiguous --> ask --> granted
+    conf -->|"yes — exactly one"| sens
+    sens -->|"routine"| act
+    sens -->|"sensitive"| approve --> granted
+    granted -->|"no"| denied --> outstanding
+    granted -->|"yes"| act
+    act --> meaningq
+    meaningq -->|"yes"| ambiguous
+    meaningq -->|"no"| ver --> reversible
+
+    classDef autoCls fill:#4FC8A5,stroke:#12604a,color:#0A0E13
+    classDef askCls fill:#E8A33D,stroke:#6b4408,color:#0A0E13
+    classDef consentCls fill:#9A8CF0,stroke:#3a2f7a,stroke-width:3px,color:#0A0E13
+    classDef failCls fill:#f6d6d6,stroke:#8a2b2b,stroke-width:2px,color:#0A0E13
+    classDef decCls fill:#fff5e0,stroke:#6b4408,color:#0A0E13
+
+    class act,ver,reversible,fromA autoCls
+    class ambiguous,ask askCls
+    class approve consentCls
+    class denied,outstanding failCls
+    class conf,sens,granted,meaningq decCls

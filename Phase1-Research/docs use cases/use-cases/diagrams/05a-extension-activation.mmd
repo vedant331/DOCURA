@@ -1,0 +1,45 @@
+%% DOCURA - Diagram 05a - Extension Lifecycle, part 1: activation and understanding
+%% Steps 1-6 of the thirteen-step lifecycle. Continues in Diagram 05b.
+%% Derived from: FR-EXT-001 to 005, FR-FRM-001 to 004, FR-FLD-001 to 007, FR-INT-001 to 003, BR-014
+%% Node-to-requirement key: see extension-flow.md
+flowchart TB
+    openpage(["1 · USER opens a supported form page"])
+    dormant["DOCURA IS DORMANT — BR-014<br/>reads, logs and transmits nothing.<br/>No indicator is shown."]
+    activate(["2 · USER activates DOCURA on THIS page"])
+    authchk{"Authenticated<br/>session valid?"}
+    signin["USER signs in — the extension shares<br/>the account of the application"]
+    indicator["Persistent, unambiguous<br/>activity indicator shown"]
+    readpage["3 · Read the activated page structure ONLY —<br/>the minimum needed to interpret fields"]
+
+    detect{"4 · Fillable form<br/>detected?"}
+    nosupport["UNSUPPORTED — report that no form<br/>was found and take no action.<br/>DOCURA stays activated but idle."]
+
+    enumerate["5 · Enumerate every field with its input type,<br/>required flag, and declared constraints"]
+    multistep{"Presented across<br/>several steps or pages?"}
+    onestep["Treated as ONE application<br/>across all of its steps"]
+
+    interpret["6 · Interpret each field meaning, with a<br/>confidence and an explicit unknown outcome"]
+    sensclass["Classify each field routine · sensitive ·<br/>consequential BEFORE any value is placed"]
+    readiness["READINESS SUMMARY — what the form needs,<br/>what the record holds, what is missing,<br/>and what will require the user"]
+    goon(["Continues in Diagram 05b"])
+
+    openpage --> dormant --> activate --> authchk
+    authchk -->|"no"| signin --> indicator
+    authchk -->|"yes"| indicator
+    indicator --> readpage --> detect
+    detect -->|"no"| nosupport
+    detect -->|"yes"| enumerate --> multistep
+    multistep -->|"yes"| onestep --> interpret
+    multistep -->|"no"| interpret --> sensclass --> readiness --> goon
+
+    classDef autoCls fill:#4FC8A5,stroke:#12604a,color:#0A0E13
+    classDef failCls fill:#f6d6d6,stroke:#8a2b2b,stroke-width:2px,color:#0A0E13
+    classDef userCls fill:#EFEAE0,stroke:#0A0E13,stroke-width:2px,color:#0A0E13
+    classDef decCls fill:#fff5e0,stroke:#6b4408,color:#0A0E13
+    classDef consentCls fill:#9A8CF0,stroke:#3a2f7a,stroke-width:3px,color:#0A0E13
+
+    class readpage,enumerate,interpret,sensclass,readiness,indicator,onestep,goon autoCls
+    class nosupport failCls
+    class openpage,activate,signin userCls
+    class dormant consentCls
+    class authchk,detect,multistep decCls

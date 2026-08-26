@@ -1,0 +1,60 @@
+%% DOCURA - Diagram 13 - Error and Exception Handling
+%% The generic path, then the twenty edge cases grouped by where automation goes after them.
+%% Derived from: §14 EC-001 to EC-020, BR-016, NFR-ERR-001 to 005, NFR-REL-001 to 004
+flowchart TB
+    fail(["A component fails or is uncertain"])
+
+    principle["BR-016 · FAIL TOWARDS INACTION<br/>do nothing and inform the user"]
+
+    protect["NFR-REL-001 · never corrupt, clear or alter<br/>what the user already entered"]
+
+    detect["SURFACE AT THE POINT OF FAILURE<br/>not discovered later at review"]
+
+    message["NFR-ERR-001 · what went wrong and<br/>what to do next — no internals"]
+
+    partial{"Did part of the<br/>operation succeed?"}
+    itemise["NFR-ERR-003 · report partial as partial"]
+
+    retryq{"Is the operation<br/>retryable?"}
+    inplace["NFR-ERR-005 · retry in place"]
+
+    scope{"What is the blast radius?"}
+
+    fieldonly["THIS FIELD ONLY — automation continues<br/>EC-002 poor quality · EC-003 wrong document<br/>EC-005 missing document · EC-006 multiple matches<br/>EC-007 no option matches · EC-008 unknown term<br/>EC-010 unsupported field type · EC-012 user rejects<br/>EC-013 user overrides · EC-020 below quality floor"]
+
+    remap["THE FORM MODEL IS STALE — re-derive, then continue<br/>EC-009 site changed between sessions<br/>EC-015 form changed while filling"]
+
+    sessionhalt["THE SESSION HALTS — nothing further is initiated<br/>EC-014 network failure mid-session<br/>EC-016 session expires mid-form<br/>EC-017 user signs out or uninstalls<br/>EC-018 user submits while DOCURA is mid-action"]
+
+    docpath["THE DOCUMENT, NOT THE SESSION<br/>EC-001 OCR fails entirely — original retained<br/>EC-004 documents conflict — user resolves"]
+
+    consentpath["THE CONSENT BOUNDARY — the user decides<br/>EC-011 sensitive document requested<br/>EC-019 same attribute requested twice"]
+
+    contin(["AUTOMATION CONTINUES<br/>with the remaining fields"])
+    stopall(["AUTOMATION STOPS<br/>placed values REMAIN and are never<br/>reverted or cleaned up"])
+    userpath(["WAITS FOR THE USER<br/>listed in the review summary"])
+
+    fail --> principle --> protect --> detect --> message --> partial
+    partial -->|"yes"| itemise --> retryq
+    partial -->|"no"| retryq
+    retryq -->|"yes"| inplace --> scope
+    retryq -->|"no"| scope
+    scope --> fieldonly --> contin
+    scope --> remap --> contin
+    scope --> sessionhalt --> stopall
+    scope --> docpath --> userpath
+    scope --> consentpath --> userpath
+
+    classDef autoCls fill:#4FC8A5,stroke:#12604a,color:#0A0E13
+    classDef askCls fill:#E8A33D,stroke:#6b4408,color:#0A0E13
+    classDef consentCls fill:#9A8CF0,stroke:#3a2f7a,stroke-width:3px,color:#0A0E13
+    classDef failCls fill:#f6d6d6,stroke:#8a2b2b,stroke-width:2px,color:#0A0E13
+    classDef decCls fill:#fff5e0,stroke:#6b4408,color:#0A0E13
+    classDef userCls fill:#EFEAE0,stroke:#0A0E13,stroke-width:2px,color:#0A0E13
+
+    class principle,protect,detect,message consentCls
+    class itemise,inplace,remap autoCls
+    class fieldonly,docpath askCls
+    class fail,sessionhalt,stopall failCls
+    class partial,retryq,scope decCls
+    class contin,userpath,consentpath userCls

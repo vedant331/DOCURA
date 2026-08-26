@@ -1,0 +1,62 @@
+%% DOCURA - Diagram 05b - Extension Lifecycle, part 2: acting, asking, and hand-back
+%% Steps 7-13 of the thirteen-step lifecycle. Continues from Diagram 05a.
+%% Derived from: FR-FILL, FR-DRP, FR-AMB, FR-APR, FR-REV, FR-SUB, FR-EXT-006, EC-012, EC-014 to EC-018
+%% Node-to-requirement key: see extension-flow.md
+flowchart TB
+    fromA(["From Diagram 05a — fields interpreted<br/>and classified"])
+    matchrec["7 · Match the structured record to the field —<br/>a ranked candidate list with confidences"]
+    evaluate{"8 · Confidence and sensitivity —<br/>see Diagram 06"}
+
+    act["9a · ACT — fill, select, or attach.<br/>Visibly marked and individually reversible."]
+    askuser["10 · ASK — ambiguity, sensitive disclosure,<br/>or a choice between documents"]
+    leaveit["9b · LEAVE UNTOUCHED and REPORT — unknown<br/>meaning, no acceptable option, or missing"]
+    nevertouch["9c · NEVER TOUCH — BR-006<br/>declarations, agreements, consent"]
+
+    rejected{"USER rejects<br/>the suggestion?"}
+    dontrepeat["EC-012 · not applied, and not proposed<br/>again for this field in this session"]
+
+    changed{"Form structure<br/>changed?"}
+    reexamine["EC-015 · re-examine the form and<br/>DISCARD every stale mapping"]
+
+    morefields{"More fields<br/>to process?"}
+    reviewstep["11 · REVIEW SUMMARY —<br/>outstanding items listed first"]
+    handback["12 · DOCURA STOPS. Hand-back recorded,<br/>with no claim about whether it was submitted."]
+    usersubmit(["13 · USER SUBMITS — BR-008<br/>DOCURA never operates the submit control"])
+
+    pausenode(["USER stops DOCURA at any point"])
+    stopped["EC-017 · all activity ceases · placed values<br/>REMAIN · no resume without re-activation"]
+    netfail(["Network loss or session expiry"])
+    degraded["EC-014 / EC-016 · nothing new initiated,<br/>everything already placed preserved"]
+
+    fromA --> matchrec --> evaluate
+    evaluate -->|"certain and routine"| act
+    evaluate -->|"ambiguous or sensitive"| askuser
+    evaluate -->|"unknown or no match"| leaveit
+    evaluate -->|"consequential"| nevertouch
+    askuser --> rejected
+    rejected -->|"yes"| dontrepeat --> morefields
+    rejected -->|"no"| act --> changed
+    changed -->|"yes"| reexamine --> matchrec
+    changed -->|"no"| morefields
+    leaveit --> morefields
+    nevertouch --> morefields
+    morefields -->|"yes"| matchrec
+    morefields -->|"no"| reviewstep --> handback --> usersubmit
+
+    pausenode -.-> stopped
+    netfail -.-> degraded
+    degraded -.->|"USER resumes explicitly"| matchrec
+
+    classDef autoCls fill:#4FC8A5,stroke:#12604a,color:#0A0E13
+    classDef askCls fill:#E8A33D,stroke:#6b4408,color:#0A0E13
+    classDef consentCls fill:#9A8CF0,stroke:#3a2f7a,stroke-width:3px,color:#0A0E13
+    classDef failCls fill:#f6d6d6,stroke:#8a2b2b,stroke-width:2px,color:#0A0E13
+    classDef userCls fill:#EFEAE0,stroke:#0A0E13,stroke-width:2px,color:#0A0E13
+    classDef decCls fill:#fff5e0,stroke:#6b4408,color:#0A0E13
+
+    class matchrec,act,reexamine,reviewstep,fromA autoCls
+    class askuser,dontrepeat askCls
+    class nevertouch,handback,usersubmit consentCls
+    class leaveit,degraded,stopped failCls
+    class pausenode,netfail userCls
+    class evaluate,rejected,changed,morefields decCls

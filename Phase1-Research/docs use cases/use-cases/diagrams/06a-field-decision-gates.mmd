@@ -1,0 +1,51 @@
+%% DOCURA - Diagram 06a - Autofill Decision Flow, part 1: OBSERVE, UNDERSTAND, MATCH
+%% The four gates that can stop a field before any confidence question is even asked.
+%% Derived from: FR-FLD-001/002/004/006, FR-INF-004, BR-002, BR-006, BR-009, AR-AST-003
+%% Continues in Diagram 06b. Node-to-requirement key: see autofill-decision-flow.md
+flowchart TB
+    obs["OBSERVE — label, adjacent text, placeholder,<br/>declared attributes, and constraints"]
+    und["UNDERSTAND — derive the field meaning<br/>together with a confidence value"]
+
+    known{"GATE 1 · Meaning above the<br/>interpretation threshold?"}
+    unknownf["UNKNOWN — BR-009 · left untouched,<br/>listed at review. Never guessed from<br/>a superficially similar label."]
+
+    consq{"GATE 2 · A declaration, agreement,<br/>or consent control?"}
+    consequential["CONSEQUENTIAL — BR-006<br/>never altered at any confidence level,<br/>and no setting can enable it"]
+
+    mat["MATCH — produce a ranked list of candidate<br/>values from the structured record"]
+
+    have{"GATE 3 · Is the information<br/>present in the record?"}
+    absent["MISSING — BR-009 · reported as missing.<br/>Nothing is substituted or invented."]
+
+    conflictq{"GATE 4 · Do the source documents<br/>conflict on this attribute?"}
+    conflicted["CONFLICT — BR-004 · neither value is<br/>authoritative, so the field is ambiguous<br/>until the user resolves it"]
+
+    floor{"Is the candidate value above<br/>the review threshold?"}
+    belowfloor["BELOW THE FLOOR — BR-002 · never used<br/>for automatic action, however well<br/>it matches the field"]
+
+    ambiguous(["AMBIGUOUS — go to Diagram 08"])
+    proceed(["Gates passed — continue in Diagram 06b"])
+
+    obs --> und --> known
+    known -->|"no"| unknownf
+    known -->|"yes"| consq
+    consq -->|"yes"| consequential
+    consq -->|"no"| mat --> have
+    have -->|"no"| absent
+    have -->|"yes"| conflictq
+    conflictq -->|"yes"| conflicted --> ambiguous
+    conflictq -->|"no"| floor
+    floor -->|"no"| belowfloor --> ambiguous
+    floor -->|"yes"| proceed
+
+    classDef autoCls fill:#4FC8A5,stroke:#12604a,color:#0A0E13
+    classDef askCls fill:#E8A33D,stroke:#6b4408,color:#0A0E13
+    classDef consentCls fill:#9A8CF0,stroke:#3a2f7a,stroke-width:3px,color:#0A0E13
+    classDef failCls fill:#f6d6d6,stroke:#8a2b2b,stroke-width:2px,color:#0A0E13
+    classDef decCls fill:#fff5e0,stroke:#6b4408,color:#0A0E13
+
+    class obs,und,mat,proceed autoCls
+    class ambiguous,belowfloor,conflicted askCls
+    class consequential consentCls
+    class unknownf,absent failCls
+    class known,consq,have,conflictq,floor decCls
