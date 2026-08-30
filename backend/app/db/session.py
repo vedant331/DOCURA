@@ -10,7 +10,12 @@ from __future__ import annotations
 
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from app.core.config import Settings
 from app.core.errors import DatabaseUnavailableError
@@ -35,6 +40,20 @@ def create_engine(settings: Settings) -> AsyncEngine:
         pool_pre_ping=True,
         connect_args={"timeout": settings.db_connect_timeout_seconds},
         echo=False,  # SQLAlchemy echo prints bound parameters — never enable here
+    )
+
+
+def create_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
+    """Build the request-scoped session factory.
+
+    ``expire_on_commit=False`` so a committed ORM object can still be read while
+    building the response, instead of triggering a lazy reload on a closed session.
+    """
+    return async_sessionmaker(
+        bind=engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autoflush=False,
     )
 
 

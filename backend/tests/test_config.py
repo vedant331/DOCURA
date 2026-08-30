@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from textwrap import dedent
+
 import pytest
 from pydantic import SecretStr, ValidationError
 
@@ -156,3 +159,91 @@ class TestSingleton:
     def test_get_settings_is_cached(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("DOCURA_DATABASE_URL", TEST_DSN)
         assert get_settings() is get_settings()
+
+
+class TestDotEnvFile:
+    """The .env file is shared with docker-compose, which owns POSTGRES_*.
+
+    ``DotEnvSettingsSource`` forwards *every* key in the file into the model, not
+    just the ``DOCURA_``-prefixed ones, so the application has to be explicit about
+    which namespace it owns.
+    """
+
+    @staticmethod
+    def _write_env(tmp_path: Path, body: str) -> None:
+        (tmp_path / ".env").write_text(dedent(body).strip() + "\n", encoding="utf-8")
+
+    def test_loads_alongside_compose_variables(self, tmp_path: Path) -> None:
+        """POSTGRES_* belong to docker-compose and must not break app startup."""
+        self._write_env(
+            tmp_path,
+            """
+            DOCURA_ENVIRONMENT=local
+            DOCURA_DATABASE_URL=postgresql://u:p@localhost:5433/docura
+            POSTGRES_USER=u
+            POSTGRES_PASSWORD=p
+            POSTGRES_DB=docura
+            POSTGRES_HOST_PORT=5433
+            """,
+        )
+
+        loaded = load_settings()
+
+        assert loaded.environment is Environment.LOCAL
+        assert loaded.database_url.get_secret_value().endswith("/docura")
+
+    def test_compose_credentials_are_not_absorbed_as_settings(self, tmp_path: Path) -> None:
+        """Ignoring a foreign key must mean ignoring it, not stashing it on the model."""
+        self._write_env(
+            tmp_path,
+            """
+            DOCURA_DATABASE_URL=postgresql://u:p@localhost:5433/docura
+            POSTGRES_PASSWORD=compose_only_secret
+            """,
+        )
+
+        loaded = load_settings()
+
+        assert "compose_only_secret" not in str(loaded.model_dump())
+        assert not hasattr(loaded, "postgres_password")
+
+    def test_typo_in_the_env_file_still_fails(self, tmp_path: Path) -> None:
+        """Strictness is preserved: an unknown DOCURA_* key is a configuration error."""
+        self._write_env(
+            tmp_path,
+            """
+            DOCURA_DATABASE_URL=postgresql://u:p@localhost:5433/docura
+            DOCURA_DATABSE_POOL_SIZE=20
+            """,
+        )
+
+        with pytest.raises(ConfigurationError, match="DOCURA_DATABSE_POOL_SIZE"):
+            load_settings()
+
+    def test_env_file_values_are_applied(self, tmp_path: Path) -> None:
+        self._write_env(
+            tmp_path,
+            """
+            DOCURA_DATABASE_URL=postgresql://u:p@localhost:5433/docura
+            DOCURA_PORT=8123
+            POSTGRES_USER=u
+            """,
+        )
+
+        assert load_settings().port == 8123
+
+    def test_unknown_docura_key_is_named_without_double_prefix(self, tmp_path: Path) -> None:
+        """The old message read DOCURA_DOCURA_PG_HOST_PORT — the prefix was applied twice."""
+        self._write_env(
+            tmp_path,
+            """
+            DOCURA_DATABASE_URL=postgresql://u:p@localhost:5433/docura
+            DOCURA_PG_HOST_PORT=5433
+            """,
+        )
+
+        with pytest.raises(ConfigurationError) as exc_info:
+            load_settings()
+
+        assert "DOCURA_DOCURA_" not in str(exc_info.value)
+        assert "DOCURA_PG_HOST_PORT" in str(exc_info.value)

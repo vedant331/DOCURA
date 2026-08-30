@@ -9,7 +9,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.auth import router as auth_router
 from app.api.health import router as health_router
+from app.api.users import router as users_router
 from app.core.config import ConfigurationError, Environment, Settings, load_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging, get_logger
@@ -18,7 +20,13 @@ from app.core.middleware import (
     RequestContextMiddleware,
     SecurityHeadersMiddleware,
 )
-from app.db.session import create_engine, dispose_engine, verify_connection
+from app.db.session import (
+    create_engine,
+    create_session_factory,
+    dispose_engine,
+    verify_connection,
+)
+from app.services.reset_delivery import build_delivery_channel
 
 logger = get_logger(__name__)
 
@@ -43,6 +51,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     engine = create_engine(settings)
     app.state.engine = engine
+    app.state.session_factory = create_session_factory(engine)
 
     try:
         await verify_connection(engine)
@@ -80,6 +89,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         openapi_url=None if is_production else "/openapi.json",
     )
     app.state.settings = settings
+    # One place decides how a reset token leaves the process; tests and a future
+    # mailer replace this attribute rather than the service that mints the token.
+    app.state.reset_delivery = build_delivery_channel(settings)
 
     # Middleware runs bottom-up: the request context is outermost so that a
     # request ID exists before any other layer can log or reject.
@@ -97,6 +109,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     register_exception_handlers(app)
     app.include_router(health_router)
+    app.include_router(auth_router)
+    app.include_router(users_router)
 
     return app
 

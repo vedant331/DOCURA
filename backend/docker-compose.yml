@@ -14,8 +14,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in backend/.env}
     ports:
       # Host 5433 by default: 5432 is commonly already taken by another local
-      # Postgres. Override with DOCURA_PG_HOST_PORT.
-      - "${DOCURA_PG_HOST_PORT:-5433}:5432"
+      # Postgres. Override with POSTGRES_HOST_PORT.
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
     volumes:
       - docura_pgdata:/var/lib/postgresql/data
     healthcheck:

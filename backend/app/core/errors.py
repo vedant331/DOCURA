@@ -64,6 +64,77 @@ class DatabaseUnavailableError(ServiceUnavailableError):
     remediation = "Wait a moment and try again. No data was read or written."
 
 
+class AuthenticationError(DocuraError):
+    """No valid credential or session accompanied the request.
+
+    One message covers every cause — absent, malformed, unknown, expired, revoked.
+    Distinguishing them would let an unauthenticated caller probe which tokens once
+    existed, and would turn a login form into an account-existence oracle.
+    """
+
+    status_code = status.HTTP_401_UNAUTHORIZED
+    title = "Not authenticated"
+    detail = "The request did not carry a valid DOCURA session."
+    remediation = "Sign in and send the returned token as 'Authorization: Bearer <token>'."
+
+
+class InvalidCredentialsError(AuthenticationError):
+    """Login failed. Deliberately indistinguishable from an unknown account."""
+
+    detail = "The email address or password is incorrect."
+    remediation = "Check both and try again."
+
+
+class PermissionDeniedError(DocuraError):
+    """Authenticated, but not entitled to the thing requested (BR-018)."""
+
+    status_code = status.HTTP_403_FORBIDDEN
+    title = "Not permitted"
+    detail = "This account may not access that."
+    remediation = "Use an account that owns the requested data."
+
+
+class EmailAlreadyRegisteredError(DocuraError):
+    """Registration collided with an existing account."""
+
+    status_code = status.HTTP_409_CONFLICT
+    title = "Email already registered"
+    detail = "An account already exists for that email address."
+    remediation = "Sign in instead, or reset the password for that account."
+
+
+class InvalidResetTokenError(DocuraError):
+    """The presented password-reset token is unusable.
+
+    One message covers absent, unknown, already-spent, and expired alike. Telling
+    them apart would turn the confirm endpoint into an oracle for which reset
+    tokens have existed, and UC-001 A2 requires that the reset not weaken the vault.
+    """
+
+    status_code = status.HTTP_400_BAD_REQUEST
+    title = "Reset link not usable"
+    detail = "This password reset link is not valid, has already been used, or has expired."
+    remediation = "Request a new password reset and use the most recent link."
+
+
+class WeakPasswordError(DocuraError):
+    """The password does not meet the configured policy."""
+
+    status_code = 422
+    title = "Password rejected"
+    detail = "The password does not meet DOCURA's requirements."
+    remediation = "Choose a longer password and try again."
+
+
+class RateLimitedError(DocuraError):
+    """Too many authentication attempts from one source."""
+
+    status_code = status.HTTP_429_TOO_MANY_REQUESTS
+    title = "Too many attempts"
+    detail = "Too many authentication attempts have been made recently."
+    remediation = "Wait a few minutes before trying again."
+
+
 def problem_response(
     *,
     status_code: int,
@@ -121,13 +192,18 @@ async def docura_error_handler(request: Request, exc: DocuraError) -> JSONRespon
         method=request.method,
         request_id=_request_id(request),
     )
-    return problem_response(
+    response = problem_response(
         status_code=exc.status_code,
         title=exc.title,
         detail=exc.detail,
         remediation=exc.remediation,
         request_id=_request_id(request),
     )
+    if isinstance(exc, AuthenticationError):
+        # RFC 9110 §11.6.1 requires a challenge on a 401. The realm is a constant;
+        # it must not describe why this particular attempt failed.
+        response.headers["WWW-Authenticate"] = 'Bearer realm="docura"'
+    return response
 
 
 async def validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:

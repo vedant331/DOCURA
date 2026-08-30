@@ -10,13 +10,16 @@ from __future__ import annotations
 import os
 from enum import StrEnum
 from functools import lru_cache
+from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlsplit, urlunsplit
 
+from dotenv import dotenv_values
 from pydantic import Field, PostgresDsn, SecretStr, ValidationError, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ENV_PREFIX = "DOCURA_"
+ENV_FILE = ".env"
 
 _ASYNC_DRIVER = "postgresql+asyncpg"
 _ACCEPTED_SCHEMES = frozenset({"postgresql", "postgres", _ASYNC_DRIVER})
@@ -50,16 +53,23 @@ class ConfigurationError(RuntimeError):
 class Settings(BaseSettings):
     """Validated application settings.
 
-    ``extra="forbid"`` means a mistyped ``DOCURA_*`` variable fails startup rather
-    than being silently ignored, which is how a production service ends up running
-    on a default it was never meant to use.
+    This application owns the ``DOCURA_`` namespace and validates it strictly: an
+    unrecognised ``DOCURA_*`` name fails startup rather than leaving a default
+    quietly in place. That check lives in :func:`_unknown_docura_variables`, not in
+    ``extra``.
+
+    ``extra`` must be ``"ignore"``. ``DotEnvSettingsSource`` forwards *every* key in
+    the ``.env`` file into the model, prefixed or not, and this file is shared with
+    ``docker-compose.yml``, which owns ``POSTGRES_*``. Under ``extra="forbid"`` those
+    foreign keys are rejected as unknown fields and the service refuses to start.
+    Policing another tool's variables is not this model's job.
     """
 
     model_config = SettingsConfigDict(
         env_prefix=ENV_PREFIX,
-        env_file=".env",
+        env_file=ENV_FILE,
         env_file_encoding="utf-8",
-        extra="forbid",
+        extra="ignore",
         frozen=True,
         validate_default=True,
     )
@@ -87,6 +97,19 @@ class Settings(BaseSettings):
     db_pool_size: Annotated[int, Field(ge=1, le=100)] = 5
     db_max_overflow: Annotated[int, Field(ge=0, le=100)] = 5
     db_connect_timeout_seconds: Annotated[float, Field(gt=0, le=60)] = 5.0
+
+    # -- Authentication -------------------------------------------------------
+    # No signing key appears here. Sessions are opaque server-side records
+    # (NFR-SEC-005 requires revocation, which a self-contained token cannot honour),
+    # so there is no authentication secret to configure, rotate, or leak.
+    session_idle_timeout_minutes: Annotated[int, Field(ge=1, le=10_080)] = 60
+    session_absolute_timeout_hours: Annotated[int, Field(ge=1, le=8_760)] = 24
+    password_min_length: Annotated[int, Field(ge=12, le=1_024)] = 12
+    # A reset token is a bearer credential for the account, so its life is measured
+    # in minutes, not days (UC-001 A2: "the reset must not weaken the vault").
+    password_reset_token_ttl_minutes: Annotated[int, Field(ge=5, le=1_440)] = 30
+    auth_rate_limit_attempts: Annotated[int, Field(ge=1, le=1_000)] = 10
+    auth_rate_limit_window_seconds: Annotated[int, Field(ge=1, le=3_600)] = 300
 
     # -- HTTP -----------------------------------------------------------------
     cors_allow_origins: tuple[str, ...] = ()
@@ -162,18 +185,41 @@ class Settings(BaseSettings):
         return self.environment is not Environment.PRODUCTION
 
 
-def _unknown_environment_variables() -> list[str]:
-    """Find ``DOCURA_*`` variables that match no field.
+def _declared_names() -> set[str]:
+    """The full ``DOCURA_*`` names this application recognises."""
+    return {f"{ENV_PREFIX}{name.upper()}" for name in Settings.model_fields}
 
-    ``extra="forbid"`` only governs values read from a dotenv file; pydantic-settings
-    silently ignores unrecognised *environment* variables. That silence is how a
-    service ends up running on a default because someone wrote ``DOCURA_DATABSE_URL``,
-    so the check is made explicit here.
+
+def _unknown_docura_variables() -> list[str]:
+    """Find ``DOCURA_*`` names, from either source, that match no field.
+
+    This is the whole of the application's strictness about its own namespace, and
+    it covers both the process environment and the ``.env`` file:
+
+    * pydantic-settings silently ignores an unrecognised *environment* variable, so
+      ``DOCURA_DATABSE_URL`` would otherwise leave the real setting on its default;
+    * ``extra`` is ``"ignore"`` for the reason given on :class:`Settings`, so the
+      dotenv source will no longer reject it either.
+
+    Names outside the ``DOCURA_`` prefix belong to other tools sharing the file and
+    are deliberately not inspected.
     """
-    known = {f"{ENV_PREFIX}{name.upper()}" for name in Settings.model_fields}
-    return sorted(
-        key for key in os.environ if key.upper().startswith(ENV_PREFIX) and key.upper() not in known
-    )
+    known = _declared_names()
+    candidates = {key.upper() for key in os.environ}
+
+    env_path = Path(ENV_FILE)
+    if env_path.is_file():
+        # Keys only — a value here is a credential and must not be read into memory
+        # for a check that does not need it.
+        candidates |= {key.upper() for key in dotenv_values(env_path)}
+
+    return sorted(key for key in candidates if key.startswith(ENV_PREFIX) and key not in known)
+
+
+def _env_name(loc: tuple[object, ...]) -> str:
+    """Render a pydantic error location as the variable a reader can go and fix."""
+    name = ".".join(str(part) for part in loc).upper()
+    return name if name.startswith(ENV_PREFIX) else f"{ENV_PREFIX}{name}"
 
 
 def load_settings() -> Settings:
@@ -183,7 +229,7 @@ def load_settings() -> Settings:
     so an invalid-configuration crash cannot print a password into a terminal or a
     container log.
     """
-    unknown = _unknown_environment_variables()
+    unknown = _unknown_docura_variables()
     if unknown:
         msg = (
             "Invalid configuration - unrecognised variable(s): "
@@ -194,10 +240,7 @@ def load_settings() -> Settings:
     try:
         return Settings()  # values come from the environment
     except ValidationError as exc:
-        problems = "; ".join(
-            f"{ENV_PREFIX}{'.'.join(str(p) for p in err['loc']).upper()}: {err['msg']}"
-            for err in exc.errors()
-        )
+        problems = "; ".join(f"{_env_name(err['loc'])}: {err['msg']}" for err in exc.errors())
         msg = f"Invalid configuration - {problems}"
         raise ConfigurationError(msg) from None
 
