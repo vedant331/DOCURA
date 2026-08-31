@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.auth import router as auth_router
+from app.api.documents import router as documents_router
 from app.api.health import router as health_router
 from app.api.users import router as users_router
 from app.core.config import ConfigurationError, Environment, Settings, load_settings
@@ -27,8 +28,13 @@ from app.db.session import (
     verify_connection,
 )
 from app.services.reset_delivery import build_delivery_channel
+from app.services.storage import build_document_storage
 
 logger = get_logger(__name__)
+
+# The one path prefix whose bodies are files rather than JSON. Named here because
+# both the router and the body-size middleware have to agree on it.
+DOCUMENTS_PREFIX = "/documents"
 
 
 @asynccontextmanager
@@ -92,10 +98,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # One place decides how a reset token leaves the process; tests and a future
     # mailer replace this attribute rather than the service that mints the token.
     app.state.reset_delivery = build_delivery_channel(settings)
+    # Likewise for document bytes: one place decides where they live, so swapping
+    # local disk for object storage is a change to build_document_storage alone.
+    app.state.document_storage = build_document_storage(settings)
 
     # Middleware runs bottom-up: the request context is outermost so that a
     # request ID exists before any other layer can log or reject.
-    app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_request_bytes)
+    app.add_middleware(
+        BodySizeLimitMiddleware,
+        max_bytes=settings.max_request_bytes,
+        upload_paths=(DOCUMENTS_PREFIX,),
+        upload_max_bytes=settings.max_upload_request_bytes,
+    )
     app.add_middleware(SecurityHeadersMiddleware, settings=settings)
     if settings.cors_allow_origins:
         app.add_middleware(
@@ -111,6 +125,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health_router)
     app.include_router(auth_router)
     app.include_router(users_router)
+    app.include_router(documents_router)
 
     return app
 

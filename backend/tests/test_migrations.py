@@ -100,6 +100,7 @@ class TestMigration:
                 "users",
                 "sessions",
                 "password_reset_tokens",
+                "documents",
                 "alembic_version",
             } <= tables
 
@@ -134,11 +135,32 @@ class TestMigration:
                 "expires_at",
                 "used_at",
             }
+
+            document_columns = {c["name"] for c in inspector.get_columns("documents")}
+            assert document_columns == {
+                "id",
+                "user_id",
+                "original_filename",
+                "storage_key",
+                "content_type",
+                "byte_size",
+                "checksum_sha256",
+                "document_type",
+                "status",
+                "created_at",
+                "updated_at",
+            }
         finally:
             engine.dispose()
 
     def test_no_later_sprint_tables_are_created(self, scratch_database: str) -> None:
-        """Sprint 2 owns accounts, sessions, and reset tokens — nothing later."""
+        """Sprint 3 owns accounts, sessions, reset tokens, and documents — nothing later.
+
+        This is the check that keeps OCR, extracted attributes, and form sessions
+        out of the schema until the sprint that actually implements them. A table
+        added early is a shape committed to before the requirement that would have
+        defined it.
+        """
         assert _run_alembic("upgrade", "head", dsn=scratch_database).returncode == 0
 
         engine = _inspection_engine(scratch_database)
@@ -151,8 +173,63 @@ class TestMigration:
             "users",
             "sessions",
             "password_reset_tokens",
+            "documents",
             "alembic_version",
         }
+
+    def test_documents_carry_no_extraction_columns_yet(self, scratch_database: str) -> None:
+        """Sprint 3 is the vault. OCR output has no column to land in.
+
+        Named explicitly rather than left to the column-set assertion above, because
+        this is the boundary most likely to be crossed by accident.
+        """
+        assert _run_alembic("upgrade", "head", dsn=scratch_database).returncode == 0
+
+        engine = _inspection_engine(scratch_database)
+        try:
+            columns = {c["name"] for c in inspect(engine).get_columns("documents")}
+        finally:
+            engine.dispose()
+
+        forbidden = {
+            "extracted_text",
+            "ocr_text",
+            "classification_confidence",
+            "confidence",
+            "extracted_fields",
+        }
+        assert not (columns & forbidden)
+
+    def test_a_users_documents_are_unique_by_checksum(self, scratch_database: str) -> None:
+        """AC-US-002-4 — 'no silent duplicate' is held by the database, not by a check."""
+        assert _run_alembic("upgrade", "head", dsn=scratch_database).returncode == 0
+
+        engine = _inspection_engine(scratch_database)
+        try:
+            indexes = inspect(engine).get_indexes("documents")
+            checksum_indexes = [
+                index
+                for index in indexes
+                if index["column_names"] == ["user_id", "checksum_sha256"]
+            ]
+
+            assert checksum_indexes, "no index on (user_id, checksum_sha256)"
+            assert any(index["unique"] for index in checksum_indexes)
+        finally:
+            engine.dispose()
+
+    def test_documents_cascade_when_an_account_is_deleted(self, scratch_database: str) -> None:
+        """FR-ACC-007, NFR-PRIV-003 — a deleted account leaves no orphaned document rows."""
+        assert _run_alembic("upgrade", "head", dsn=scratch_database).returncode == 0
+
+        engine = _inspection_engine(scratch_database)
+        try:
+            foreign_keys = inspect(engine).get_foreign_keys("documents")
+            user_fk = next(fk for fk in foreign_keys if fk["referred_table"] == "users")
+
+            assert user_fk["options"].get("ondelete") == "CASCADE"
+        finally:
+            engine.dispose()
 
     def test_email_uniqueness_is_enforced_by_the_database(self, scratch_database: str) -> None:
         """Application-level checks race; the constraint is what actually holds."""
@@ -184,6 +261,26 @@ class TestMigration:
         assert "users" not in tables
         assert "sessions" not in tables
         assert "password_reset_tokens" not in tables
+        assert "documents" not in tables
+
+    def test_upgrade_after_a_downgrade_still_works(self, scratch_database: str) -> None:
+        """The enum types have to go on the way down, or the next upgrade collides.
+
+        ``op.drop_table`` leaves a PostgreSQL enum type in place. Without the
+        explicit drops in the Sprint 3 downgrade this passes once and fails the
+        second time, which is the worst way for a migration to be wrong.
+        """
+        assert _run_alembic("upgrade", "head", dsn=scratch_database).returncode == 0
+        assert _run_alembic("downgrade", "base", dsn=scratch_database).returncode == 0
+
+        result = _run_alembic("upgrade", "head", dsn=scratch_database)
+        assert result.returncode == 0, result.stderr
+
+        engine = _inspection_engine(scratch_database)
+        try:
+            assert "documents" in set(inspect(engine).get_table_names())
+        finally:
+            engine.dispose()
 
     def test_sessions_cascade_when_an_account_is_deleted(self, scratch_database: str) -> None:
         """FR-ACC-007 will delete accounts; sessions must not outlive their owner."""

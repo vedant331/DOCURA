@@ -8,3 +8,7 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 *.egg-info/
+
+# The document vault's local storage. Real identity documents land here during
+# development; nothing under it may ever reach version control.
+var/

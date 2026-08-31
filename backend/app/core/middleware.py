@@ -115,36 +115,55 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
     """Reject oversized bodies on the declared length, before reading them.
 
     This is the cheap half of the defence. A chunked request can lie about or omit
-    ``Content-Length``; the real ceiling for uploads belongs with the upload
-    endpoint in a later sprint, and this guard exists so no endpoint added before
-    then is unbounded by default.
+    ``Content-Length``, so the per-file ceiling is also enforced while the upload is
+    read (``app.services.document_validation.measure_and_validate``); this guard
+    exists so that no endpoint is unbounded by default and so an obviously oversized
+    request is refused before a byte of it is parsed.
+
+    The vault needs a second, larger limit. ``max_bytes`` sizes a JSON body — a
+    scanned marksheet is orders of magnitude bigger — so paths under
+    ``upload_paths`` are measured against ``upload_max_bytes`` instead. The
+    exemption is a prefix list rather than a per-route setting because this
+    middleware runs long before routing has decided which endpoint will answer.
     """
 
-    def __init__(self, app: Callable[..., Awaitable[None]], *, max_bytes: int) -> None:
+    def __init__(
+        self,
+        app: Callable[..., Awaitable[None]],
+        *,
+        max_bytes: int,
+        upload_paths: tuple[str, ...] = (),
+        upload_max_bytes: int | None = None,
+    ) -> None:
         super().__init__(app)
         self._max_bytes = max_bytes
+        self._upload_paths = upload_paths
+        self._upload_max_bytes = upload_max_bytes if upload_max_bytes is not None else max_bytes
+
+    def _limit_for(self, path: str) -> int:
+        if any(path == prefix or path.startswith(f"{prefix}/") for prefix in self._upload_paths):
+            return self._upload_max_bytes
+        return self._max_bytes
 
     async def dispatch(self, request: Request, call_next: Handler) -> Response:
         declared = request.headers.get("content-length")
         if declared is not None:
+            limit = self._limit_for(request.url.path)
             try:
                 length = int(declared)
             except ValueError:
                 length = -1
-            if length > self._max_bytes:
+            if length > limit:
                 logger.info(
                     "request.body_too_large",
                     path=request.url.path,
                     method=request.method,
-                    limit_bytes=self._max_bytes,
+                    limit_bytes=limit,
                 )
                 return problem_response(
                     status_code=HTTP_413_CONTENT_TOO_LARGE,
                     title="Request too large",
-                    detail=(
-                        f"The request body exceeds the {self._max_bytes} byte limit "
-                        "for this endpoint."
-                    ),
+                    detail=(f"The request body exceeds the {limit} byte limit for this endpoint."),
                     remediation="Send a smaller request body.",
                     request_id=getattr(request.state, "request_id", None),
                 )

@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from app.core.config import Environment, Settings, get_settings
@@ -98,14 +99,20 @@ OTHER_PASSWORD = "a-different-sufficiently-long-password"
 
 
 @pytest.fixture
-def db_settings() -> Settings:
-    """Settings pointed at the test database, with a fast idle timeout."""
+def db_settings(tmp_path: Path) -> Settings:
+    """Settings pointed at the test database, with a fast idle timeout.
+
+    ``document_storage_root`` is a per-test temporary directory. Nothing in the
+    suite may write to a developer's real vault, and a test that asserts a file was
+    removed must not be able to remove someone's actual document.
+    """
     assert INTEGRATION_DSN is not None
     return Settings(
         environment=Environment.TEST,
         database_url=INTEGRATION_DSN,
         session_idle_timeout_minutes=60,
         session_absolute_timeout_hours=24,
+        document_storage_root=tmp_path / "documents",
     )
 
 
@@ -130,7 +137,10 @@ async def db_engine(db_settings: Settings) -> AsyncIterator[Any]:
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
         await connection.execute(
-            text("TRUNCATE TABLE password_reset_tokens, sessions, users RESTART IDENTITY CASCADE")
+            text(
+                "TRUNCATE TABLE documents, password_reset_tokens, sessions, users "
+                "RESTART IDENTITY CASCADE"
+            )
         )
 
     try:
@@ -166,10 +176,15 @@ def reset_delivery() -> RecordingResetDelivery:
 
 
 @pytest.fixture
-async def auth_client(
+async def auth_app(
     db_settings: Settings, db_engine: Any, reset_delivery: RecordingResetDelivery
-) -> AsyncIterator[AsyncClient]:
-    """A client wired to the real database, through the real middleware stack."""
+) -> AsyncIterator[FastAPI]:
+    """The application itself, wired to the real database.
+
+    Split out from ``auth_client`` so a test can reach ``app.state`` — which is how
+    a substitute storage backend or delivery channel is installed, and the only
+    honest way to test what the application does when a dependency fails.
+    """
     from app.api.auth import reset_rate_limiter
     from app.db.session import create_session_factory
     from app.main import create_app
@@ -181,11 +196,17 @@ async def auth_client(
     app.state.session_factory = create_session_factory(db_engine)
     app.state.reset_delivery = reset_delivery
 
-    transport = ASGITransport(app=app, raise_app_exceptions=False)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as http_client:
-        yield http_client
+    yield app
 
     reset_rate_limiter()
+
+
+@pytest.fixture
+async def auth_client(auth_app: FastAPI) -> AsyncIterator[AsyncClient]:
+    """A client wired to the real database, through the real middleware stack."""
+    transport = ASGITransport(app=auth_app, raise_app_exceptions=False)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as http_client:
+        yield http_client
 
 
 async def register_and_login(
@@ -212,3 +233,58 @@ async def request_reset_token(
     response = await client.post("/auth/password-reset/request", json={"email": email})
     assert response.status_code == 202, response.text
     return delivery.latest_token_for(email)
+
+
+# --------------------------------------------------------------------------
+# Sprint 3: document vault fixtures.
+#
+# The sample files are real enough to pass validation — each carries the leading
+# bytes its format is identified by — and small enough to be built inline. A test
+# that needs a *rejected* file builds one that deliberately does not.
+# --------------------------------------------------------------------------
+
+# %PDF-1.7 header, one object, and a trailer. Not a rich document; it is a file
+# whose type is unambiguous, which is what the vault checks.
+PDF_BYTES = b"%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n"
+# SOI, an APP0/JFIF segment, and EOI.
+JPEG_BYTES = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00" + b"\xff\xd9"
+# The 8-byte PNG signature followed by a minimal IHDR chunk.
+PNG_BYTES = (
+    b"\x89PNG\r\n\x1a\n"
+    b"\x00\x00\x00\rIHDR"
+    b"\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00"
+    b"\x1f\x15\xc4\x89"
+)
+
+
+def pdf_bytes(marker: bytes = b"") -> bytes:
+    """A distinct PDF. The marker changes the checksum, so two calls are not duplicates."""
+    return PDF_BYTES + b"% " + marker + b"\n" if marker else PDF_BYTES
+
+
+def upload_file(
+    content: bytes, filename: str = "marksheet.pdf", content_type: str = "application/pdf"
+) -> dict[str, Any]:
+    """A single-file multipart payload in the shape httpx expects."""
+    return {"files": (filename, content, content_type)}
+
+
+async def upload_document(
+    client: AsyncClient,
+    token: str,
+    *,
+    content: bytes = PDF_BYTES,
+    filename: str = "marksheet.pdf",
+    content_type: str = "application/pdf",
+) -> dict[str, Any]:
+    """Upload one file and return the accepted document's metadata."""
+    response = await client.post(
+        "/documents",
+        headers=auth_header(token),
+        files=upload_file(content, filename, content_type),
+    )
+    assert response.status_code == 201, response.text
+    accepted = response.json()["accepted"]
+    assert len(accepted) == 1, response.text
+    document: dict[str, Any] = accepted[0]
+    return document

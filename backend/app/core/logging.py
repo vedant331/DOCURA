@@ -62,6 +62,18 @@ _SENSITIVE_KEYS: frozenset[str] = frozenset(
         "attributevalue",
         "fieldvalue",
         "filledvalue",
+        # Document identity (Sprint 3). A filename on a document vault is itself
+        # personal — "aadhaar-priya-2024.pdf" names a person and a document type
+        # before a byte is read — so it is masked rather than trusted to callers.
+        # The storage key and checksum are masked for a different reason: they
+        # describe where DOCURA keeps a file and how to recognise it, and neither
+        # belongs in an operational log (NFR-ERR-004, NFR-PRIV-007).
+        "filename",
+        "originalfilename",
+        "storagekey",
+        "storagepath",
+        "checksum",
+        "checksumsha256",
     }
 )
 

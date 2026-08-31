@@ -111,6 +111,18 @@ class Settings(BaseSettings):
     auth_rate_limit_attempts: Annotated[int, Field(ge=1, le=1_000)] = 10
     auth_rate_limit_window_seconds: Annotated[int, Field(ge=1, le=3_600)] = 300
 
+    # -- Document vault -------------------------------------------------------
+    # Where uploaded originals live. Relative paths resolve against the process
+    # working directory, so no machine-specific absolute path is baked in; a
+    # deployment points this at its own volume via DOCURA_DOCUMENT_STORAGE_ROOT.
+    document_storage_root: Path = Path("var/documents")
+    # FR-UPL-003 requires the limits be stated in advance, but no approved document
+    # fixes a number. Both figures below are assumptions (Sprint 3 ASM-S3-1) chosen
+    # to cover the MVP document set — a scanned multi-page marksheet, a photograph,
+    # a signature — and are configurable precisely because they are not derived.
+    max_document_bytes: Annotated[int, Field(ge=1024, le=100 * 1024 * 1024)] = 10 * 1024 * 1024
+    max_documents_per_upload: Annotated[int, Field(ge=1, le=50)] = 5
+
     # -- HTTP -----------------------------------------------------------------
     cors_allow_origins: tuple[str, ...] = ()
     max_request_bytes: Annotated[int, Field(ge=1024, le=100 * 1024 * 1024)] = 1024 * 1024
@@ -172,6 +184,19 @@ class Settings(BaseSettings):
         if parts.port:
             netloc = f"{netloc}:{parts.port}"
         return urlunsplit((parts.scheme, netloc, parts.path, "", ""))
+
+    @property
+    def max_upload_request_bytes(self) -> int:
+        """Ceiling for a multipart upload request.
+
+        ``max_request_bytes`` sizes a JSON body and is far too small for a scanned
+        PDF, so the upload route needs its own limit. It is derived rather than
+        configured separately: a fourth number that could disagree with the two
+        real limits would only ever be wrong. The slack covers multipart boundaries,
+        part headers, and the filenames themselves.
+        """
+        multipart_overhead = 1024 * 1024
+        return self.max_documents_per_upload * self.max_document_bytes + multipart_overhead
 
     @property
     def render_json_logs(self) -> bool:

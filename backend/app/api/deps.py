@@ -16,6 +16,7 @@ from app.core.ratelimit import SlidingWindowRateLimiter
 from app.db.models import Session, User
 from app.services.auth_service import resolve_session
 from app.services.reset_delivery import ResetDeliveryChannel
+from app.services.storage import DocumentStorage
 
 logger = get_logger(__name__)
 
@@ -48,6 +49,17 @@ async def get_reset_delivery(request: Request) -> ResetDeliveryChannel:
     """
     channel: ResetDeliveryChannel = request.app.state.reset_delivery
     return channel
+
+
+async def get_document_storage(request: Request) -> DocumentStorage:
+    """The configured place where document bytes live.
+
+    Resolved from application state rather than constructed per request, for the
+    same reason as the reset channel: the vault's endpoints must not know which
+    backend they are talking to, and a test needs to substitute a failing one.
+    """
+    storage: DocumentStorage = request.app.state.document_storage
+    return storage
 
 
 async def get_current_session(
@@ -90,6 +102,7 @@ CurrentSession = Annotated[Session, Depends(get_current_session)]
 DbSession = Annotated[AsyncSession, Depends(get_db)]
 AppSettings = Annotated[Settings, Depends(get_settings_dep)]
 ResetDelivery = Annotated[ResetDeliveryChannel, Depends(get_reset_delivery)]
+DocumentStore = Annotated[DocumentStorage, Depends(get_document_storage)]
 
 
 def client_key(request: Request) -> str:

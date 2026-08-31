@@ -126,6 +126,74 @@ class WeakPasswordError(DocuraError):
     remediation = "Choose a longer password and try again."
 
 
+class DocumentNotFoundError(DocuraError):
+    """No document with that id is readable by the requesting account.
+
+    Deliberately 404 rather than 403, and deliberately the same answer whether the
+    id names nothing at all or names another user's document. A 403 would confirm
+    that the id exists, which on a vault of identity documents is itself a
+    disclosure: it would let anyone with a list of ids learn which are real. NFR-
+    SEC-003 requires the ownership check; NFR-PRIV-002 requires that the check not
+    become an oracle.
+    """
+
+    status_code = status.HTTP_404_NOT_FOUND
+    title = "Document not found"
+    detail = "No document with that identifier is available to this account."
+    remediation = "Check the identifier against your document list and try again."
+
+
+class UnsupportedDocumentError(DocuraError):
+    """The file is not one of the accepted types, or is not readable as one.
+
+    FR-UPL-004 requires the message to name both the reason *and* the accepted
+    alternatives, so the accepted list is part of the remediation rather than
+    something the caller is expected to already know.
+    """
+
+    status_code = 415
+    title = "File type not accepted"
+    detail = "That file is not a document type DOCURA accepts."
+    remediation = "Upload a PDF, JPG, or PNG."
+
+
+class DocumentTooLargeError(DocuraError):
+    """The file exceeds the configured per-document ceiling (FR-UPL-003)."""
+
+    status_code = 413
+    title = "File too large"
+    detail = "That file is larger than DOCURA accepts for a single document."
+    remediation = "Upload a smaller file, or split the document."
+
+
+class DuplicateDocumentError(DocuraError):
+    """The exact same bytes are already stored for this account.
+
+    FR-UPL-007 and AC-US-002-4 forbid a *silent* duplicate. Choosing between keep,
+    replace, and version needs document versioning (FR-DOC-005), which is not built
+    yet, so this sprint reports the collision and names the document already held
+    rather than deciding on the user's behalf (BR-003).
+    """
+
+    status_code = status.HTTP_409_CONFLICT
+    title = "Document already stored"
+    detail = "An identical file is already in this account's vault."
+    remediation = "Open the document you already have, or upload a different file."
+
+
+class DocumentStorageError(ServiceUnavailableError):
+    """The bytes could not be written, read, or removed.
+
+    A 503 rather than a 500 because BR-016 applies: the operation did not happen,
+    nothing was partially applied, and retrying is the right next step. The
+    underlying path and OS error are logged and never described to the client
+    (NFR-ERR-004).
+    """
+
+    detail = "DOCURA could not reach the store that holds your documents."
+    remediation = "Wait a moment and try again. Nothing was changed."
+
+
 class RateLimitedError(DocuraError):
     """Too many authentication attempts from one source."""
 

@@ -20,6 +20,9 @@ dependencies = [
     # Schema migrations. A runtime dependency, not a dev one: a deployment runs
     # `alembic upgrade head` before the service starts.
     "alembic>=1.13",
+    # Starlette parses multipart bodies through this; without it the document
+    # upload route raises at import time rather than at request time.
+    "python-multipart>=0.0.18",
 ]
 
 [project.optional-dependencies]
