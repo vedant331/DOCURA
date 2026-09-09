@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.auth import router as auth_router
 from app.api.documents import router as documents_router
 from app.api.health import router as health_router
+from app.api.record import router as record_router
 from app.api.users import router as users_router
 from app.core.config import ConfigurationError, Environment, Settings, load_settings
 from app.core.errors import register_exception_handlers
@@ -27,6 +28,7 @@ from app.db.session import (
     dispose_engine,
     verify_connection,
 )
+from app.services.extraction import build_document_extractor
 from app.services.reset_delivery import build_delivery_channel
 from app.services.storage import build_document_storage
 
@@ -101,6 +103,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Likewise for document bytes: one place decides where they live, so swapping
     # local disk for object storage is a change to build_document_storage alone.
     app.state.document_storage = build_document_storage(settings)
+    # And likewise for reading them: one place decides which extraction engine is
+    # installed (Sprint 4 decision D-01). The engine itself is TBD pending the
+    # held-out evaluation AR-AST-008 requires, so what is installed here is an
+    # extractor that refuses honestly rather than one that invents results.
+    app.state.document_extractor = build_document_extractor(settings)
 
     # Middleware runs bottom-up: the request context is outermost so that a
     # request ID exists before any other layer can log or reject.
@@ -126,6 +133,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auth_router)
     app.include_router(users_router)
     app.include_router(documents_router)
+    app.include_router(record_router)
 
     return app
 

@@ -36,7 +36,14 @@ class DocumentResponse(BaseModel):
     checksum_sha256: str
     document_type: DocumentType
     status: DocumentStatus = Field(
-        description="Processing status (FR-UPL-005). Extraction arrives in a later sprint.",
+        description="Processing status (FR-UPL-005).",
+    )
+    failure_reason: str | None = Field(
+        default=None,
+        description=(
+            "When status is 'failed', a plain-language statement of what went wrong "
+            "(FR-OCR-009). Null otherwise. The original file is retained regardless."
+        ),
     )
     created_at: datetime
     updated_at: datetime

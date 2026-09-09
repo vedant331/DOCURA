@@ -143,6 +143,21 @@ class DocumentNotFoundError(DocuraError):
     remediation = "Check the identifier against your document list and try again."
 
 
+class AttributeNotFoundError(DocuraError):
+    """No value for that canonical attribute is available to the requesting account.
+
+    404, and identical whether the identifier names nothing DOCURA has a value for or
+    names something this account simply has no observation of — the same oracle-
+    avoidance as :class:`DocumentNotFoundError` (NFR-SEC-003, NFR-PRIV-002). It never
+    confirms that another account holds the attribute.
+    """
+
+    status_code = status.HTTP_404_NOT_FOUND
+    title = "Attribute not found"
+    detail = "No value for that attribute is available to this account."
+    remediation = "Check the attribute identifier, or upload a document that provides it."
+
+
 class UnsupportedDocumentError(DocuraError):
     """The file is not one of the accepted types, or is not readable as one.
 
@@ -181,6 +196,22 @@ class DuplicateDocumentError(DocuraError):
     remediation = "Open the document you already have, or upload a different file."
 
 
+class DocumentNotReprocessableError(DocuraError):
+    """Reprocessing was requested for a document that is still being processed.
+
+    FR-OCR-010 lets a user re-run a document, but only one that has come to rest —
+    ``ready``, ``needs_review``, or ``failed``. Re-queuing one that is still
+    ``queued`` or ``processing`` would let a second run race the first, which
+    NFR-REL-005 (no duplicate work) weighs against; the request is refused rather
+    than silently ignored.
+    """
+
+    status_code = status.HTTP_409_CONFLICT
+    title = "Document is still processing"
+    detail = "This document cannot be reprocessed because it is still being processed."
+    remediation = "Wait until it is ready or has failed, then request reprocessing again."
+
+
 class DocumentStorageError(ServiceUnavailableError):
     """The bytes could not be written, read, or removed.
 
@@ -192,6 +223,34 @@ class DocumentStorageError(ServiceUnavailableError):
 
     detail = "DOCURA could not reach the store that holds your documents."
     remediation = "Wait a moment and try again. Nothing was changed."
+
+
+class DocumentExtractionError(ServiceUnavailableError):
+    """A document could not be read by the extraction engine.
+
+    FR-OCR-009 fixes the shape of this failure: the original file is retained, what
+    failed is stated, and a retry and a manual-entry path are offered. The remediation
+    below says the first two of those; the retry and manual-entry paths are part of
+    the processing pipeline and are not built yet, so nothing here promises them.
+
+    BR-016 is why this is a failure at all rather than an empty result: a component
+    that cannot do its work does nothing and says so.
+    """
+
+    detail = "DOCURA could not read this document."
+    remediation = "Your file is unchanged and still stored. Try again in a moment."
+
+
+class ExtractionNotConfiguredError(DocumentExtractionError):
+    """No extraction engine is configured (Sprint 4 decision D-01).
+
+    The engine remains TBD until the held-out evaluation required by AR-AST-008
+    reports. Reaching this is an honest statement that document understanding is not
+    available yet — never an empty or invented extraction result.
+    """
+
+    detail = "DOCURA cannot read documents yet: no extraction engine is configured."
+    remediation = "Your file is stored and unchanged. Document reading is not available yet."
 
 
 class RateLimitedError(DocuraError):

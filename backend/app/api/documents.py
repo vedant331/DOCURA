@@ -37,6 +37,7 @@ from app.services.document_service import (
     get_document,
     list_documents,
     open_document_content,
+    request_reprocess,
     store_document,
 )
 from app.services.document_validation import (
@@ -66,6 +67,7 @@ def _to_response(document: Document) -> DocumentResponse:
         checksum_sha256=document.checksum_sha256,
         document_type=document.document_type,
         status=document.status,
+        failure_reason=document.failure_reason,
         created_at=document.created_at,
         updated_at=document.updated_at,
     )
@@ -268,6 +270,25 @@ async def download_document(
             "Content-Length": str(document.byte_size),
         },
     )
+
+
+@router.post(
+    "/{document_id}/reprocess",
+    response_model=DocumentResponse,
+    summary="Reprocess a document",
+)
+async def reprocess_document(
+    document_id: uuid.UUID, user: CurrentUser, db: DbSession
+) -> DocumentResponse:
+    """Queue a document to be read again (FR-OCR-010).
+
+    Owner-scoped like everything else: a document another account owns answers 404.
+    The document returns to 'queued' and the worker picks it up; a document still in
+    flight is refused with 409 rather than run twice. Nothing about the stored
+    original changes (BR-013).
+    """
+    document = await request_reprocess(db, user_id=user.id, document_id=document_id)
+    return _to_response(document)
 
 
 @router.delete(

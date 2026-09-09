@@ -101,6 +101,12 @@ class TestMigration:
                 "sessions",
                 "password_reset_tokens",
                 "documents",
+                "processing_jobs",
+                "extraction_runs",
+                "extraction_run_metadata",
+                "extraction_pages",
+                "extraction_blocks",
+                "attribute_observations",
                 "alembic_version",
             } <= tables
 
@@ -147,19 +153,83 @@ class TestMigration:
                 "checksum_sha256",
                 "document_type",
                 "status",
+                # Sprint 4 D-09: the user-facing failure reason (FR-OCR-009). Still no
+                # extraction output — that boundary is held below.
+                "failure_reason",
                 "created_at",
                 "updated_at",
+            }
+
+            # Sprint 4 D-09: the durable job that drives extraction. Job machinery
+            # only — no extracted content, which stays out until FR-OCR-004 / FR-INF.
+            job_columns = {c["name"] for c in inspector.get_columns("processing_jobs")}
+            assert job_columns == {
+                "id",
+                "document_id",
+                "state",
+                "attempts",
+                "max_attempts",
+                "claimed_at",
+                "last_error",
+                "created_at",
+                "updated_at",
+            }
+
+            # Sprint 4 (second milestone): the persisted engine-neutral extraction
+            # result. These carry text, regions, and confidence — not fields, not
+            # attributes, not classification (still G-12 / FR-INF).
+            run_columns = {c["name"] for c in inspector.get_columns("extraction_runs")}
+            assert run_columns == {
+                "id",
+                "document_id",
+                "engine",
+                "engine_version",
+                "created_at",
+            }
+            page_columns = {c["name"] for c in inspector.get_columns("extraction_pages")}
+            assert page_columns == {"id", "run_id", "number", "text", "confidence"}
+            block_columns = {c["name"] for c in inspector.get_columns("extraction_blocks")}
+            assert block_columns == {
+                "id",
+                "page_id",
+                "sequence",
+                "text",
+                "confidence",
+                "region_x",
+                "region_y",
+                "region_width",
+                "region_height",
+            }
+            meta_columns = {c["name"] for c in inspector.get_columns("extraction_run_metadata")}
+            assert meta_columns == {"id", "run_id", "key", "value"}
+
+            # Sprint 4 (third milestone): the structured attribute observation. It
+            # carries a canonical attribute *identifier*, a value, a confidence, and
+            # provenance to a block and run — not a field set, not a definition, not a
+            # sensitivity tier (G-12 / G-14 / G-15), and no file metadata.
+            observation_columns = {
+                c["name"] for c in inspector.get_columns("attribute_observations")
+            }
+            assert observation_columns == {
+                "id",
+                "run_id",
+                "source_block_id",
+                "canonical_identifier",
+                "value",
+                "confidence",
+                "created_at",
             }
         finally:
             engine.dispose()
 
     def test_no_later_sprint_tables_are_created(self, scratch_database: str) -> None:
-        """Sprint 3 owns accounts, sessions, reset tokens, and documents — nothing later.
+        """The schema is accounts, the vault, and the D-09 processing job — nothing more.
 
-        This is the check that keeps OCR, extracted attributes, and form sessions
-        out of the schema until the sprint that actually implements them. A table
-        added early is a shape committed to before the requirement that would have
-        defined it.
+        This is the check that keeps OCR *output*, extracted attributes, and form
+        sessions out of the schema until the sprint that actually implements them. A
+        table added early is a shape committed to before the requirement that would
+        have defined it. ``processing_jobs`` (Sprint 4 D-09) is job machinery, not
+        extraction output, so it belongs; the attribute and form tables still do not.
         """
         assert _run_alembic("upgrade", "head", dsn=scratch_database).returncode == 0
 
@@ -174,6 +244,12 @@ class TestMigration:
             "sessions",
             "password_reset_tokens",
             "documents",
+            "processing_jobs",
+            "extraction_runs",
+            "extraction_run_metadata",
+            "extraction_pages",
+            "extraction_blocks",
+            "attribute_observations",
             "alembic_version",
         }
 

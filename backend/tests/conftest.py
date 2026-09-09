@@ -138,7 +138,9 @@ async def db_engine(db_settings: Settings) -> AsyncIterator[Any]:
         await connection.run_sync(Base.metadata.create_all)
         await connection.execute(
             text(
-                "TRUNCATE TABLE documents, password_reset_tokens, sessions, users "
+                "TRUNCATE TABLE attribute_observations, extraction_blocks, "
+                "extraction_pages, extraction_run_metadata, extraction_runs, "
+                "processing_jobs, documents, password_reset_tokens, sessions, users "
                 "RESTART IDENTITY CASCADE"
             )
         )

@@ -24,13 +24,25 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
-from app.core.errors import DocumentNotFoundError, DocumentStorageError, DuplicateDocumentError
+from app.core.errors import (
+    DocumentNotFoundError,
+    DocumentNotReprocessableError,
+    DocumentStorageError,
+    DuplicateDocumentError,
+)
 from app.core.logging import get_logger
-from app.db.models import Document, DocumentStatus, DocumentType, User
+from app.db.models import Document, DocumentStatus, DocumentType, JobState, ProcessingJob, User
 from app.services.document_validation import ValidatedUpload, validate_upload
 from app.services.storage import DocumentStorage, generate_storage_key
 
 logger = get_logger(__name__)
+
+# The states a document may be reprocessed from (FR-OCR-010): only ones that have
+# come to rest. Re-running one that is still queued or processing would race the
+# run already in flight (NFR-REL-005).
+REPROCESSABLE_STATES = frozenset(
+    {DocumentStatus.READY, DocumentStatus.NEEDS_REVIEW, DocumentStatus.FAILED}
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,10 +127,13 @@ async def store_document(
         byte_size=written,
         checksum_sha256=validated.checksum_sha256,
         document_type=DocumentType.UNCLASSIFIED,
-        # Nothing moves it out of `queued` in this sprint; the extraction pipeline
-        # that does is FR-OCR work.
         status=DocumentStatus.QUEUED,
     )
+    # The processing job is created in the *same transaction* as the document
+    # (D-09.4 / the transactional-outbox note): a committed document can never exist
+    # without its job, and a rolled-back upload leaves no orphan job behind. The
+    # cascade on Document.processing_job inserts it in FK order on flush.
+    document.processing_job = ProcessingJob(max_attempts=settings.worker_max_attempts)
     db.add(document)
 
     try:
@@ -193,6 +208,44 @@ async def get_document(db: AsyncSession, *, user_id: uuid.UUID, document_id: uui
     if document is None:
         logger.info("document.access_denied", user_id=str(user_id))
         raise DocumentNotFoundError
+    return document
+
+
+async def request_reprocess(
+    db: AsyncSession, *, user_id: uuid.UUID, document_id: uuid.UUID
+) -> Document:
+    """Re-queue a document for extraction at the owner's request (FR-OCR-010).
+
+    Ownership is settled first, exactly as every other document operation, so a
+    document belonging to someone else answers 404. The existing job is *reset* — its
+    attempt count, claim, and error cleared — rather than a second job created: one
+    document has one job (NFR-REL-005), and a fresh row would let two runs disagree.
+    Only a document that has come to rest may be reprocessed; one still in flight is
+    refused rather than raced.
+    """
+    document = await get_document(db, user_id=user_id, document_id=document_id)
+
+    if document.status not in REPROCESSABLE_STATES:
+        raise DocumentNotReprocessableError
+
+    job = await db.scalar(
+        select(ProcessingJob).where(ProcessingJob.document_id == document.id)
+    )
+    if job is None:  # pragma: no cover - every document is created with a job
+        # A document with no job predates the pipeline. Give it one rather than fail,
+        # so reprocessing works uniformly.
+        job = ProcessingJob(document_id=document.id, max_attempts=1)
+        db.add(job)
+
+    job.state = JobState.PENDING
+    job.attempts = 0
+    job.claimed_at = None
+    job.last_error = None
+    document.status = DocumentStatus.QUEUED
+    document.failure_reason = None
+
+    await db.commit()
+    logger.info("document.reprocess_requested", user_id=str(user_id), document_ref=str(document.id))
     return document
 
 

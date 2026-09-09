@@ -1,0 +1,75 @@
+# DOCURA — Canonical Attribute Vocabulary (gap G-13)
+# =============================================================================
+# Versioned CONFIGURATION ARTEFACT. Product-Management-owned, reviewed content;
+# Engineering owns this file's format (G-13.1 content/format split). This is the
+# machine-readable form of the vocabulary; the authoritative human record is
+#   backend/docs/SPRINT_4_G13_CANONICAL_ATTRIBUTE_VOCABULARY.md
+# and it must not diverge from it.
+#
+# This file satisfies G-13 exit criterion X12 — "the artefact is held as
+# configuration and versioned" (G-13.1, G-13.10). It holds ONLY approved content:
+#   - PD-B  (7 Sep 2026, §21 / register D-05.11): the one entry, its one-attribute
+#           scope, and the N-TEXT normalisation rule.
+#   - PD-A/C/D/E (8 Sep 2026, §22 / register D-05.12): the four gate-A decisions.
+#
+# It is a configuration artefact only. It is NOT wired into extraction: D-01's
+# replaceable extraction interface (app/services/extraction.py) is untouched, and
+# nothing here places a value into the running system. Per G-13.9 it is
+# NOT RELEASABLE while any sensitivity tier is TBD (gate G-13-B, G-14/G-15), and
+# it creates no attribute beyond the one approved entry.
+# =============================================================================
+
+# Artefact-level version (G-13.2 "plus one artefact-level version"; G-13.10).
+# The file name carries the same version so each version is an immutable artefact.
+vocabulary_version = "v0.1-draft"
+
+# NOT RELEASABLE: property 7 (sensitivity tier) is TBD by design on every entry
+# (G-13.9, gate G-13-B — content owed by G-14/G-15). Do not set true here.
+releasable = false
+
+# The scope subjects admitted by the approved G-13.2 revision (§9.0.1). No others.
+admitted_scope_subjects = ["person", "qualification"]
+
+# -----------------------------------------------------------------------------
+# Normalisation rules, referenced by an attribute's property 5. Defined once and
+# reused. N-TEXT is the approved minimum-semantic rule for a `text` attribute
+# (PD-B, §20.3 / §21.1). It is a comparison-time form only; the raw as-printed
+# value is what the user sees.
+# -----------------------------------------------------------------------------
+[normalisation.N-TEXT]
+applies_to_data_type = "text"
+# The four approved rules, verbatim in intent (§20.3):
+casing_is_not_meaning = true                    # 1
+whitespace_run_length_is_not_meaning = true     # 2 (edge + inter-token run length)
+edge_whitespace_is_not_meaning = true           # 2
+nothing_else_is_folded = true                   # 3 (any other difference is a difference)
+raw_value_retained_and_shown = true             # 4 (G-13.6; comparison-time form only)
+# Deliberately NOT decided by N-TEXT and therefore NOT enabled here (§20.3):
+# unicode normalisation form, diacritic folding, transliteration, punctuation
+# folding, token reordering, alias/nickname matching, edit distance, similarity
+# threshold, and the canonical spelling. Adding any is a conflict-detection change
+# requiring re-approval (G-13.5) and is evaluation-dependent (D-02 §11.6).
+
+# -----------------------------------------------------------------------------
+# The vocabulary. Exactly one approved entry (one-attribute scope, PD-B item 2).
+# Exactly seven properties per entry; no eighth property (G-13.2).
+# Property order: 1 identifier · 2 display label · 3 semantic definition ·
+# 4 data type · 5 normalisation rule · 6 scope-keyed multiplicity · 7 tier.
+# -----------------------------------------------------------------------------
+[[attribute]]
+canonical_identifier = "person.full_name"                                                   # 1
+display_label = "Full name"                                                                  # 2
+semantic_definition = "The name of the person who owns the record, as printed on a document that evidences it."  # 3
+data_type = "text"                                                                           # 4
+normalisation_rule = "N-TEXT"                                                                # 5 (ref -> [normalisation.N-TEXT])
+
+# 6 — scope-keyed cardinality: how many values, per what subject ("one per person").
+[attribute.multiplicity]
+scope_subject = "person"
+cardinality = "one"
+
+# 7 — sensitivity tier: TBD by design. Slot present, empty (G-13.9, gate G-13-B).
+# Do not assign a tier here; that resolves G-14/G-15 by the back door.
+[attribute.sensitivity_tier]
+status = "TBD"
+value = ""

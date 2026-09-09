@@ -15,6 +15,7 @@ from app.core.logging import get_logger
 from app.core.ratelimit import SlidingWindowRateLimiter
 from app.db.models import Session, User
 from app.services.auth_service import resolve_session
+from app.services.extraction import DocumentExtractor
 from app.services.reset_delivery import ResetDeliveryChannel
 from app.services.storage import DocumentStorage
 
@@ -62,6 +63,19 @@ async def get_document_storage(request: Request) -> DocumentStorage:
     return storage
 
 
+async def get_document_extractor(request: Request) -> DocumentExtractor:
+    """The configured extraction engine (Sprint 4 decision D-01).
+
+    Resolved from application state for the same reason as the storage backend: the
+    engine is replaceable, and nothing above ``app.services.extraction`` may know
+    which one is installed. No endpoint depends on this yet — the boundary exists
+    before the pipeline that will use it, so that the pipeline can be built against
+    an interface rather than against a library.
+    """
+    extractor: DocumentExtractor = request.app.state.document_extractor
+    return extractor
+
+
 async def get_current_session(
     request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
@@ -103,6 +117,7 @@ DbSession = Annotated[AsyncSession, Depends(get_db)]
 AppSettings = Annotated[Settings, Depends(get_settings_dep)]
 ResetDelivery = Annotated[ResetDeliveryChannel, Depends(get_reset_delivery)]
 DocumentStore = Annotated[DocumentStorage, Depends(get_document_storage)]
+DocumentExtraction = Annotated[DocumentExtractor, Depends(get_document_extractor)]
 
 
 def client_key(request: Request) -> str:

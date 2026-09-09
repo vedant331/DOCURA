@@ -18,7 +18,18 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, String, func
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy import Enum as SqlEnum
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -35,6 +46,12 @@ STORAGE_KEY_MAX_LENGTH = 64
 CONTENT_TYPE_MAX_LENGTH = 128
 # Hex SHA-256.
 CHECKSUM_LENGTH = 64
+# A user-facing sentence stating what failed (FR-OCR-009). It holds a DocuraError's
+# already-safe `detail`, never an internal trace or engine message (NFR-ERR-004).
+FAILURE_REASON_MAX_LENGTH = 500
+# The internal error a worker records for operators — a class name and message. Kept
+# on the job, never returned to a user.
+JOB_ERROR_MAX_LENGTH = 500
 
 
 class Base(DeclarativeBase):
@@ -266,6 +283,12 @@ class Document(Base):
         nullable=False,
         default=DocumentStatus.QUEUED,
     )
+    # Set when `status` is FAILED (FR-OCR-009: "state what failed"). Null otherwise,
+    # and cleared when the document is re-queued. It is a user-facing string — the
+    # safe `detail` of the failure — so the internal cause stays on the job.
+    failure_reason: Mapped[str | None] = mapped_column(
+        String(FAILURE_REASON_MAX_LENGTH), nullable=True
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -278,6 +301,23 @@ class Document(Base):
     )
 
     user: Mapped[User] = relationship(back_populates="documents")
+    # Exactly one job per document (NFR-REL-005): the row is created with the
+    # document and removed with it. `delete-orphan` keeps the ORM consistent with the
+    # database's ON DELETE CASCADE.
+    processing_job: Mapped[ProcessingJob | None] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    # Every successful extraction of this document, newest last. Retained rather than
+    # overwritten: a reprocess adds a run, so the history of what each engine version
+    # read stays inspectable (the reason ExtractionResult carries its engine version).
+    extraction_runs: Mapped[list[ExtractionRun]] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="ExtractionRun.created_at",
+    )
 
     __table_args__ = (
         # Newest first is the only order the vault listing uses (FR-DOC-001).
@@ -293,4 +333,335 @@ class Document(Base):
             unique=True,
         ),
         Index("ix_documents_storage_key_unique", "storage_key", unique=True),
+    )
+
+
+class JobState(enum.StrEnum):
+    """The processing job's own state (Sprint 4 decision D-09).
+
+    Deliberately *not* the same enum as :class:`DocumentStatus`. FR-UPL-005 names the
+    five states a user sees; a job additionally carries claim, attempt, and error
+    machinery a user must never see (NFR-ERR-004). The document's status is derived
+    from the job's outcome, so the two stay independent — the discipline D-09.3 asks
+    for and that Sprint 3 already applied to ``DocumentStatus``.
+    """
+
+    PENDING = "pending"
+    CLAIMED = "claimed"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
+class ProcessingJob(Base):
+    """One durable unit of extraction work for one document (D-09 Option B).
+
+    The job is a committed database row, created in the same transaction as its
+    document (a document can never exist without its job), and it is what makes
+    interrupted processing recoverable (NFR-REL-002): a worker that dies leaves a
+    claim that goes stale and is picked up again. There is exactly one job per
+    document (NFR-REL-005) — enforced by the unique index below — so redelivery or a
+    reprocess request resets this row rather than creating a second.
+    """
+
+    __tablename__ = "processing_jobs"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    state: Mapped[JobState] = mapped_column(
+        SqlEnum(
+            JobState,
+            name="job_state",
+            native_enum=True,
+            validate_strings=True,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=False,
+        default=JobState.PENDING,
+    )
+    # How many times execution has been attempted. Incremented when the job is
+    # claimed, so a crash between claim and outcome still counts — an unbounded loop
+    # on a poison document is what the ceiling below prevents.
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # The retry ceiling, captured at creation from configuration so that changing the
+    # setting does not silently re-open jobs that already exhausted the old limit.
+    max_attempts: Mapped[int] = mapped_column(Integer, nullable=False)
+    # When a worker claimed this job. A claim older than the configured timeout is
+    # treated as abandoned and may be reclaimed (NFR-REL-002 recoverability).
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Operator-facing cause of the last failure (a class name and message). Never
+    # returned to a user — that is what documents.failure_reason is for (NFR-ERR-004).
+    last_error: Mapped[str | None] = mapped_column(String(JOB_ERROR_MAX_LENGTH), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    document: Mapped[Document] = relationship(back_populates="processing_job")
+
+    __table_args__ = (
+        # One job per document (NFR-REL-005). The unique constraint is what actually
+        # guarantees it; the service resets the existing row rather than inserting.
+        Index("ix_processing_jobs_document_id_unique", "document_id", unique=True),
+        # The claim query scans by state and age; this index keeps it off a table
+        # scan as the vault grows.
+        Index("ix_processing_jobs_state_created_at", "state", "created_at"),
+    )
+
+
+class ExtractionRun(Base):
+    """One successful, engine-neutral reading of a document (FR-OCR-001, D-01/D-09).
+
+    This is the persisted form of :class:`~app.services.extraction.ExtractionResult`:
+    it exists only when an engine produced a whole result, so a failed attempt leaves
+    no run at all (the failure lives on the :class:`ProcessingJob`). A document may
+    accumulate several runs — one per successful (re)processing — and they are kept,
+    not overwritten, so a value can later be traced to the exact engine version that
+    read it (AR-AST-008 evaluation, D-02 L4/L5).
+
+    It holds only what the seam already represents. There is deliberately **no field,
+    attribute, or classification here**: mapping this text to the defined field set is
+    FR-OCR-004 / FR-INF (gap G-12), and it will *reference* these rows rather than
+    replace them.
+    """
+
+    __tablename__ = "extraction_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # Which component produced this run, recorded on the run rather than in
+    # configuration: a result calibrated against one engine version is not evidence
+    # for another (ExtractionResult carries these for the same reason).
+    engine: Mapped[str] = mapped_column(String(100), nullable=False)
+    engine_version: Mapped[str] = mapped_column(String(100), nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    document: Mapped[Document] = relationship(back_populates="extraction_runs")
+    pages: Mapped[list[ExtractionPage]] = relationship(
+        back_populates="run",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="ExtractionPage.number",
+    )
+    # The engine-neutral facts about the run (timings, settings, page counts). Never
+    # document content and never an extracted personal value (NFR-PRIV-007) — the
+    # seam guarantees that, and this stores only what it hands over.
+    run_metadata: Mapped[list[ExtractionRunMetadata]] = relationship(
+        back_populates="run",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    # The structured attribute values recognised in this run. Kept with the run, so a
+    # reprocess adds a newer run's observations without disturbing this one's, and the
+    # "current" state is the newest run's — no `is_current` flag is stored.
+    attribute_observations: Mapped[list[AttributeObservation]] = relationship(
+        back_populates="run",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    __table_args__ = (
+        # History for one document, in order.
+        Index("ix_extraction_runs_document_id_created_at", "document_id", "created_at"),
+    )
+
+
+class ExtractionRunMetadata(Base):
+    """One engine-neutral fact about a run — a key and a value (the seam's mapping).
+
+    A relational key/value pair rather than a JSON blob: the mapping is genuinely
+    open-ended, so this is its normal relational form, and it stays queryable.
+    """
+
+    __tablename__ = "extraction_run_metadata"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    run_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("extraction_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    key: Mapped[str] = mapped_column(String(200), nullable=False)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+
+    run: Mapped[ExtractionRun] = relationship(back_populates="run_metadata")
+
+    __table_args__ = (
+        # One value per key per run.
+        Index("ix_extraction_run_metadata_run_id_key_unique", "run_id", "key", unique=True),
+    )
+
+
+class ExtractionPage(Base):
+    """One page of a run (FR-OCR-008: multi-page documents stay one document)."""
+
+    __tablename__ = "extraction_pages"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    run_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("extraction_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # 1-based, as the seam numbers pages.
+    number: Mapped[int] = mapped_column(Integer, nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    # The page-level confidence, or NULL where the engine reported none — a distinct
+    # fact from a low confidence, kept distinguishable (FR-OCR-005, AR-AST-001).
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    run: Mapped[ExtractionRun] = relationship(back_populates="pages")
+    blocks: Mapped[list[ExtractionBlock]] = relationship(
+        back_populates="page",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="ExtractionBlock.sequence",
+    )
+
+    __table_args__ = (
+        Index("ix_extraction_pages_run_id_number_unique", "run_id", "number", unique=True),
+    )
+
+
+class ExtractionBlock(Base):
+    """A run of text an engine read, with where it came from and how sure it was.
+
+    A block is a unit of *text*, not a unit of *meaning* (mirroring TextBlock): it is
+    deliberately not a field. Its region — the fractional box on the page (FR-OCR-007
+    provenance) — is stored inline because it is one-to-one with the block and small;
+    the region's page number is not stored, as it equals this block's page by
+    construction. All four coordinates are present together or all NULL.
+    """
+
+    __tablename__ = "extraction_blocks"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    page_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("extraction_pages.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # Order within the page: the seam hands blocks over as an ordered tuple, and this
+    # preserves that order across the round trip.
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Page-relative fractions (0..1), or all NULL when the engine gave no region.
+    region_x: Mapped[float | None] = mapped_column(Float, nullable=True)
+    region_y: Mapped[float | None] = mapped_column(Float, nullable=True)
+    region_width: Mapped[float | None] = mapped_column(Float, nullable=True)
+    region_height: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    page: Mapped[ExtractionPage] = relationship(back_populates="blocks")
+
+    __table_args__ = (
+        Index("ix_extraction_blocks_page_id_sequence_unique", "page_id", "sequence", unique=True),
+    )
+
+
+class AttributeObservation(Base):
+    """A value read for a canonical attribute, with where it came from (Sprint 4, D-05).
+
+    This is the third and distinct layer of the extraction model, and it must not be
+    collapsed into the other two: an :class:`ExtractionBlock` is a unit of *text*; the
+    canonical vocabulary (``config/vocabulary/…``) is the *definition* of an attribute;
+    an ``AttributeObservation`` is one *value*, read from a block, recognised **as** a
+    named attribute. It is what FR-INF-002's "every attribute value shall reference the
+    document it came from and the confidence with which it was read" attaches to.
+
+    It stores only the canonical attribute's **identifier** (``person.full_name``), not
+    its definition: the vocabulary is versioned configuration and stays the one place a
+    definition lives (G-13). Nothing here is a sensitivity tier (FR-INF-007, gaps
+    G-14/G-15 — a property of the *definition*, not of a value), a conflict/duplicate
+    decision (FR-INF-004, NFR-REL-005, gap G-20 — several observations of one attribute
+    sit here side by side, uncompared), or any file metadata (that lives on
+    :class:`Document`, reached through ``run.document_id`` and never copied).
+
+    **Provenance is exact**: ``source_block`` → its page → ``run`` → ``run.document``.
+    **History is by run**: the observation is owned by the run that produced it, kept
+    when a later run supersedes it, so "current" is the newest run's observations and
+    needs no stored flag. ``run_id`` equals ``source_block``'s run by construction — an
+    observation is built from a block of the run that produced it.
+    """
+
+    __tablename__ = "attribute_observations"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    # The run that produced this observation — its run identity, and (through
+    # `run.document_id`) its document. Owned by the run: a reprocess adds a newer run's
+    # observations and this row stays, which is what makes "current = newest run" work.
+    run_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("extraction_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # The exact block the value was read from (FR-OCR-007 / BR-010 attributability).
+    # Page and region are reached through it; its run equals `run_id` by construction.
+    source_block_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("extraction_blocks.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # The canonical attribute's stable identifier, from the versioned vocabulary. Only
+    # the handle is stored; the definition it names is not copied onto the row (G-13).
+    canonical_identifier: Mapped[str] = mapped_column(String(200), nullable=False)
+    # The value as recognised for the attribute. Text, because a value is not sized in
+    # advance and the vocabulary's data type is not enumerated here.
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    # The confidence the value was read with, or NULL where the engine reported none —
+    # a distinct fact from a low confidence, kept distinguishable (FR-OCR-005).
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    run: Mapped[ExtractionRun] = relationship(back_populates="attribute_observations")
+    source_block: Mapped[ExtractionBlock] = relationship()
+
+    __table_args__ = (
+        # Retrieval and the "newest run" currency query both filter by run.
+        Index("ix_attribute_observations_run_id", "run_id"),
     )

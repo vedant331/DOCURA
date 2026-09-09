@@ -123,6 +123,19 @@ class Settings(BaseSettings):
     max_document_bytes: Annotated[int, Field(ge=1024, le=100 * 1024 * 1024)] = 10 * 1024 * 1024
     max_documents_per_upload: Annotated[int, Field(ge=1, le=50)] = 5
 
+    # -- Processing worker (Sprint 4 decision D-09) ---------------------------
+    # None of these is a requirement value: the specification fixes no poll cadence,
+    # retry ceiling, or claim timeout. They are operational knobs (NFR-MNT-004
+    # posture), defaulted here and overridable per deployment.
+    # How long an idle worker waits before polling for the next job.
+    worker_poll_interval_seconds: Annotated[float, Field(gt=0, le=60)] = 1.0
+    # The bounded automatic-retry ceiling (D-09.3 note 2). After this many attempts a
+    # document becomes `failed` rather than retrying forever on a poison input.
+    worker_max_attempts: Annotated[int, Field(ge=1, le=10)] = 3
+    # A claim older than this is treated as abandoned and may be reclaimed, so a
+    # worker that died mid-job does not strand its document (NFR-REL-002).
+    worker_claim_timeout_seconds: Annotated[int, Field(ge=1, le=3_600)] = 300
+
     # -- HTTP -----------------------------------------------------------------
     cors_allow_origins: tuple[str, ...] = ()
     max_request_bytes: Annotated[int, Field(ge=1024, le=100 * 1024 * 1024)] = 1024 * 1024
