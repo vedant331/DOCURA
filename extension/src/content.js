@@ -41,8 +41,9 @@
   Promise.all([
     import(chrome.runtime.getURL("src/detect.js")),
     import(chrome.runtime.getURL("src/readiness.js")),
+    import(chrome.runtime.getURL("src/retrieval.js")),
   ])
-    .then(([{ FormWatcher }, { computeReadiness }]) => {
+    .then(([{ FormWatcher }, { computeReadiness }, { computeRetrieval }]) => {
       if (globalThis.__docuraWatcher) return;
       const watcher = new FormWatcher({
         root: document,
@@ -54,6 +55,11 @@
           // the default resolver maps nothing, so the record is neither needed nor fetched
           // and no personal data crosses into this world.
           globalThis.__docuraReadiness = computeReadiness({ snapshot: result });
+          // Deterministic retrieval + ambiguity/ask (M5) on the same latest snapshot. Same
+          // frozen boundary: with no approved mapping the default resolver maps nothing, so no
+          // record is fetched and no personal value ever crosses into this world. M5 only
+          // surfaces a decision (available/ambiguous/conflict/unavailable) — it never fills.
+          globalThis.__docuraRetrieval = computeRetrieval({ snapshot: result });
         },
       }).start();
       globalThis.__docuraWatcher = watcher;
@@ -63,6 +69,7 @@
         globalThis.__docuraWatcher = null;
         globalThis.__docuraForms = null;
         globalThis.__docuraReadiness = null;
+        globalThis.__docuraRetrieval = null;
       };
     })
     .catch(() => {
