@@ -42,9 +42,12 @@
     import(chrome.runtime.getURL("src/detect.js")),
     import(chrome.runtime.getURL("src/readiness.js")),
     import(chrome.runtime.getURL("src/retrieval.js")),
+    import(chrome.runtime.getURL("src/sensitivity.js")),
   ])
-    .then(([{ FormWatcher }, { computeReadiness }, { computeRetrieval }]) => {
+    .then(([{ FormWatcher }, { computeReadiness }, { computeRetrieval }, { computeReview, newApprovalLedger }]) => {
       if (globalThis.__docuraWatcher) return;
+      // Session-scoped, in-memory approval ledger (BR-007: never persisted or generalised).
+      const approvals = (globalThis.__docuraApprovals = newApprovalLedger());
       const watcher = new FormWatcher({
         root: document,
         // Latest snapshot only; stale enumerations are never retained (FR-FRM-007).
@@ -60,6 +63,12 @@
           // record is fetched and no personal value ever crosses into this world. M5 only
           // surfaces a decision (available/ambiguous/conflict/unavailable) — it never fills.
           globalThis.__docuraRetrieval = computeRetrieval({ snapshot: result });
+          // Sensitive-approval + review (M6). Same frozen boundary: production seams classify
+          // nothing (tier unknown, no mapping) so nothing is disclosable and no value is read
+          // or transmitted. It only surfaces a review — it never fills, submits, or operates a
+          // declaration control. The session approval ledger scopes any future approval to one
+          // disclosure and is cleared on teardown.
+          globalThis.__docuraReview = computeReview({ snapshot: result, approvals });
         },
       }).start();
       globalThis.__docuraWatcher = watcher;
@@ -70,6 +79,9 @@
         globalThis.__docuraForms = null;
         globalThis.__docuraReadiness = null;
         globalThis.__docuraRetrieval = null;
+        globalThis.__docuraReview = null;
+        approvals.clear(); // no approval survives the session (BR-007).
+        globalThis.__docuraApprovals = null;
       };
     })
     .catch(() => {

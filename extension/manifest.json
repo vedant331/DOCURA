@@ -15,7 +15,7 @@
   "host_permissions": ["http://127.0.0.1:8000/*"],
   "web_accessible_resources": [
     {
-      "resources": ["src/detect.js", "src/readiness.js", "src/retrieval.js"],
+      "resources": ["src/detect.js", "src/readiness.js", "src/retrieval.js", "src/sensitivity.js"],
       "matches": ["<all_urls>"]
     }
   ]
