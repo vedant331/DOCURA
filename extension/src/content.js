@@ -43,8 +43,9 @@
     import(chrome.runtime.getURL("src/readiness.js")),
     import(chrome.runtime.getURL("src/retrieval.js")),
     import(chrome.runtime.getURL("src/sensitivity.js")),
+    import(chrome.runtime.getURL("src/matching.js")),
   ])
-    .then(([{ FormWatcher }, { computeReadiness }, { computeRetrieval }, { computeReview, newApprovalLedger }]) => {
+    .then(([{ FormWatcher }, { computeReadiness }, { computeRetrieval }, { computeReview, newApprovalLedger }, { computeMatching }]) => {
       if (globalThis.__docuraWatcher) return;
       // Session-scoped, in-memory approval ledger (BR-007: never persisted or generalised).
       const approvals = (globalThis.__docuraApprovals = newApprovalLedger());
@@ -69,6 +70,12 @@
           // declaration control. The session approval ledger scopes any future approval to one
           // disclosure and is cleared on teardown.
           globalThis.__docuraReview = computeReview({ snapshot: result, approvals });
+          // Deterministic document matching + preparation (M7) on the same latest snapshot.
+          // Same frozen boundary: with no approved matcher/threshold/tier the production seams
+          // resolve nothing, so no document is fetched, every file-upload field is `unresolved`,
+          // and no personal data crosses into this world. It only surfaces a matching/preparation
+          // decision and a preview target — it never attaches a document, fills, or submits.
+          globalThis.__docuraMatching = computeMatching({ snapshot: result, approvals });
         },
       }).start();
       globalThis.__docuraWatcher = watcher;
@@ -80,6 +87,7 @@
         globalThis.__docuraReadiness = null;
         globalThis.__docuraRetrieval = null;
         globalThis.__docuraReview = null;
+        globalThis.__docuraMatching = null;
         approvals.clear(); // no approval survives the session (BR-007).
         globalThis.__docuraApprovals = null;
       };
