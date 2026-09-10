@@ -8,6 +8,7 @@ import pytest
 from httpx import AsyncClient
 
 from app.core.config import Settings
+from tests.conftest import TEST_DSN
 
 
 class TestLiveness:
@@ -113,6 +114,43 @@ class TestSecurityHeaders:
 
         assert "default-src 'none'" in csp
         assert "frame-ancestors 'none'" in csp
+
+    async def test_docs_csp_is_not_relaxed_outside_local(self, client: AsyncClient) -> None:
+        """The Swagger CDN allowance is local-only; in every other env /docs stays locked.
+
+        The ``client`` fixture runs in the TEST environment, where /docs is served but
+        must still carry the strict policy — the CDN is never allowed here or in prod.
+        """
+        csp = (await client.get("/docs")).headers["Content-Security-Policy"]
+
+        assert csp.startswith("default-src 'none'")
+        assert "cdn.jsdelivr.net" not in csp
+
+    async def test_local_docs_csp_allows_only_swagger_assets(self) -> None:
+        """In local development, /docs may load Swagger UI's CDN + inline init script.
+
+        Nothing else is relaxed: a non-docs path in the very same app stays locked
+        down, so the allowance is scoped to the docs pages, not the environment.
+        """
+        from httpx import ASGITransport
+
+        from app.core.config import Environment
+        from app.main import create_app
+
+        app = create_app(Settings(environment=Environment.LOCAL, database_url=TEST_DSN))
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as local:
+            docs_csp = (await local.get("/docs")).headers["Content-Security-Policy"]
+            other_csp = (await local.get("/openapi.json")).headers["Content-Security-Policy"]
+
+        # /docs: Swagger's CDN and inline script are permitted, base policy still 'none'.
+        assert "default-src 'none'" in docs_csp
+        assert "https://cdn.jsdelivr.net" in docs_csp
+        assert "'unsafe-inline'" in docs_csp
+        assert "connect-src 'self'" in docs_csp
+        # A non-docs response in the same local app keeps the strict lockdown.
+        assert other_csp.startswith("default-src 'none'")
+        assert "cdn.jsdelivr.net" not in other_csp
 
     async def test_no_hsts_outside_production(self, client: AsyncClient) -> None:
         """HSTS on a plain-HTTP local service would pin a scheme that is not served."""

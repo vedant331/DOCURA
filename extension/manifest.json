@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "DOCURA",
+  "version": "0.1.0",
+  "description": "DOCURA browser extension (M3): explicit activation, a persistent active indicator, user-controlled stop, and read-only form-structure detection on the activated tab. It reads no field values and transmits no page content.",
+  "action": {
+    "default_popup": "src/popup.html",
+    "default_title": "DOCURA"
+  },
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": ["http://127.0.0.1:8000/*"],
+  "web_accessible_resources": [
+    {
+      "resources": ["src/detect.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

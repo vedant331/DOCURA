@@ -96,6 +96,10 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    form_sessions: Mapped[list[FormSession]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
     __table_args__ = (
         # Uniqueness is enforced by the database, not by a read-then-write check in
@@ -664,4 +668,236 @@ class AttributeObservation(Base):
     __table_args__ = (
         # Retrieval and the "newest run" currency query both filter by run.
         Index("ix_attribute_observations_run_id", "run_id"),
+    )
+
+
+# A form field's stable handle or label — the field DOCURA touched, never its value
+# (FR-AUD-006 records the fields affected, not the third-party form's contents).
+FIELD_REF_MAX_LENGTH = 200
+# DOCURA's own short description of an action, or the user's own answer to an
+# ambiguity (FR-AUD-002). Never third-party form content (FR-AUD-006, BR-017).
+ACTION_DETAIL_MAX_LENGTH = 500
+
+
+class FormSessionState(enum.StrEnum):
+    """The lifecycle of one authenticated form session (M1, step3.pdf §1.7-1.20).
+
+    A form session exists only after the user *explicitly activates* DOCURA on an
+    open form (FR-INT-001, BR-014): there is no passive or pre-activation state to
+    model, so creation is activation and ``created_at`` records it. From ``ACTIVE`` it
+    reaches exactly one terminal state, each named by a requirement:
+
+    * ``HANDED_BACK`` — review finished and control returned to the user; DOCURA
+      records reaching this point and makes no claim about whether the user submitted
+      (FR-SUB-003/004, D14).
+    * ``STOPPED`` — the user stopped DOCURA, signed out, or uninstalled, or the form
+      was submitted while DOCURA was mid-action (FR-EXT-006, EC-017, EC-018, US-016).
+    * ``EXPIRED`` — the authenticating session expired mid-form, so automated action
+      halts until re-authentication (EC-016, NFR-SEC-005).
+
+    A transient *degraded* connection (EC-014, NFR-REL-003) is **not** a lifecycle
+    state: the session stays ``ACTIVE`` and the failure is recorded as a
+    :class:`FormAction` with ``outcome = FAILED`` — never as a success (BR-016).
+    """
+
+    ACTIVE = "active"
+    HANDED_BACK = "handed_back"
+    STOPPED = "stopped"
+    EXPIRED = "expired"
+
+
+class FormActionType(enum.StrEnum):
+    """What DOCURA attempted or did during a form session (FR-AUD-001/002/003).
+
+    The vocabulary of the append-only history, enumerated from the requirements that
+    define it — the same discipline :class:`DocumentStatus` uses (all five FR-UPL-005
+    states named though Sprint 3 only sets one). M1 *writes* only ``HAND_BACK`` and
+    ``STOP``, through the session lifecycle endpoints; the rest are the categories the
+    fill/select/attach/ask/approval milestones will record through
+    :func:`app.services.form_session.record_action`, and are listed here so those
+    milestones append a row rather than alter this type.
+
+    No value implies DOCURA acts on its own: every fill, selection, and attachment is
+    an action the user activated (BR-014) and can reverse (BR-015); DOCURA never
+    submits (BR-008) and never accepts a declaration or consent (BR-006).
+    """
+
+    # Written by M1 (the session lifecycle):
+    HAND_BACK = "hand_back"  # FR-SUB-004: session reached hand-back
+    STOP = "stop"  # FR-EXT-006: user stopped DOCURA
+    # Reserved for later milestones (the form-action pipeline):
+    FILL = "fill"  # FR-AUD-001, FR-FILL: a value placed in a field
+    SELECT = "select"  # FR-AUD-001, FR-DRP: an option selected
+    ATTACH = "attach"  # FR-AUD-001, FR-MATCH: a document attached
+    ASK = "ask"  # FR-AUD-002, FR-AMB: a question asked
+    ANSWER = "answer"  # FR-AUD-002, FR-AMB-006: an answer the user gave
+    APPROVAL_REQUEST = "approval_request"  # FR-AUD-003, FR-APR-001
+    APPROVAL_DECISION = "approval_decision"  # FR-AUD-003, FR-APR-002
+    OVERRIDE = "override"  # FR-FILL-006, EC-013: the user changed a filled value
+
+
+class FormActionOutcome(enum.StrEnum):
+    """How an action ended — generic and small, so success is never assumed.
+
+    Three outcomes, and deliberately no approval-specific ones (approve/deny is the
+    *content* of an ``APPROVAL_DECISION``, recorded in ``detail``, not an outcome the
+    audit layer must define before approval exists — M1 invents no approval semantics):
+
+    * ``SUCCEEDED`` — the action was performed (a value placed, the hand-back made).
+    * ``FAILED`` — the attempt did not complete: a component failed, or the connection
+      degraded (BR-016, EC-014). Recorded as a failure, never dressed up as success.
+    * ``SKIPPED`` — DOCURA deliberately left the field untouched (an unknown field,
+      BR-009; a skipped ambiguity, FR-AMB-004; a denied disclosure, FR-APR-003).
+    """
+
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+
+
+def _form_enum(enum_cls: type[enum.StrEnum], name: str) -> SqlEnum:
+    """A native PostgreSQL enum that stores the members' *values*, like the others.
+
+    ``values_callable`` keeps "hand_back" in the column rather than "HAND_BACK", so a
+    reader of the table sees the vocabulary the requirements use — the same reason the
+    document and job enums do it.
+    """
+    return SqlEnum(
+        enum_cls,
+        name=name,
+        native_enum=True,
+        validate_strings=True,
+        values_callable=lambda cls: [member.value for member in cls],
+    )
+
+
+class FormSession(Base):
+    """One authenticated user's session on one form (M1 — the form-action foundation).
+
+    This is the infrastructure the future browser extension and form-action pipeline
+    hang from. It is deliberately *not* a workflow engine: a row, a lifecycle state,
+    and a start/end time, owned by exactly one account. ``user_id`` is the whole of
+    its isolation and is applied in the ``WHERE`` clause of every query
+    (:mod:`app.services.form_session`, NFR-SEC-003), never checked after a global load.
+
+    What is **absent** is as deliberate as what is present. There is no stored form
+    URL, page origin, or third-party form content: no MVP requirement needs one, and
+    BR-017/FR-AUD-006 keep third-party context out. A session is identified by its own
+    id; the extension holds which tab it belongs to. Naming and revisiting an
+    application context across sessions is FR-INT-004, FUTURE WON'T, so it is unmodelled.
+    """
+
+    __tablename__ = "form_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    state: Mapped[FormSessionState] = mapped_column(
+        _form_enum(FormSessionState, "form_session_state"),
+        nullable=False,
+        default=FormSessionState.ACTIVE,
+    )
+
+    # Creation *is* activation (FR-INT-001, BR-014): a session exists only after the
+    # user explicitly activated DOCURA, so no separate ``activated_at`` is stored.
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    # Set once, when the session leaves ACTIVE for any terminal state. ``state`` says
+    # which terminal state; this says when. Null while the session is live.
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    user: Mapped[User] = relationship(back_populates="form_sessions")
+    actions: Mapped[list[FormAction]] = relationship(
+        back_populates="session",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="FormAction.created_at",
+    )
+
+    __table_args__ = (
+        # The listing is per-account, newest first (like the vault listing).
+        Index("ix_form_sessions_user_id_created_at", "user_id", "created_at"),
+    )
+
+
+class FormAction(Base):
+    """One append-only entry in a form session's history (FR-AUD-001…006).
+
+    History entries are never edited; a correction or reversal is a *new* row that
+    points back at the one it supersedes (FR-AUD-005, BR-015) — the whole of the
+    reversibility model, and not an event-sourcing framework. The service only ever
+    inserts; nothing updates or deletes a row (a deleted account cascades the lot).
+
+    It records what DOCURA did and the field it affected, and references provenance by
+    id rather than copying it (BR-010, FR-INF-002, item 8): the source ``document`` and
+    ``observation`` (value + confidence live on the observation) are foreign keys, not
+    duplicated bytes, storage keys, checksums, or extracted values. It stores **no**
+    third-party form content (FR-AUD-006, BR-017): ``field_ref`` is a field's handle,
+    ``detail`` is DOCURA's own words or the user's own answer, and both are bounded.
+    """
+
+    __tablename__ = "form_actions"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("form_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    action_type: Mapped[FormActionType] = mapped_column(
+        _form_enum(FormActionType, "form_action_type"), nullable=False
+    )
+    outcome: Mapped[FormActionOutcome] = mapped_column(
+        _form_enum(FormActionOutcome, "form_action_outcome"), nullable=False
+    )
+
+    # The form field DOCURA touched — its stable handle or label, never its value
+    # (FR-AUD-006). Null for actions not tied to a single field (a hand-back, a stop).
+    field_ref: Mapped[str | None] = mapped_column(String(FIELD_REF_MAX_LENGTH), nullable=True)
+    # Provenance, referenced by id (BR-010). SET NULL rather than CASCADE: deleting a
+    # document (BR-018) must not erase the history of what DOCURA did with it — the
+    # entry survives with the link cleared.
+    source_document_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    source_observation_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("attribute_observations.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    # The earlier action this one reverses or corrects (FR-AUD-005, BR-015). Null for
+    # an original action. Same session, so it cascades with it.
+    reverses_action_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("form_actions.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    # DOCURA's own short description, or the user's own answer to an ambiguity
+    # (FR-AUD-002). Never third-party form content (FR-AUD-006, BR-017).
+    detail: Mapped[str | None] = mapped_column(String(ACTION_DETAIL_MAX_LENGTH), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    session: Mapped[FormSession] = relationship(back_populates="actions")
+
+    __table_args__ = (
+        # Viewing a session's history in order (FR-AUD-004) filters by session, by time.
+        Index("ix_form_actions_session_id_created_at", "session_id", "created_at"),
     )

@@ -80,17 +80,43 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         return str(uuid.uuid4())
 
 
+# The lockdown policy for every JSON response: nothing loads or frames.
+_STRICT_CSP = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+
+# The pages FastAPI's built-in interactive docs are served on. Only these get the
+# relaxed policy below, and only in local development.
+_DOCS_PATHS = frozenset({"/docs", "/docs/oauth2-redirect"})
+
+# Just enough to let Swagger UI's CDN assets, its inline init script, and its fetch of
+# /openapi.json load. Development only — production disables /docs entirely (see
+# app.main.create_app), so this policy is never emitted there.
+_DOCS_CSP = (
+    "default-src 'none'; "
+    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+    "img-src 'self' data: https://cdn.jsdelivr.net https://fastapi.tiangolo.com; "
+    "font-src 'self' https://cdn.jsdelivr.net; "
+    "connect-src 'self'; "
+    "frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+)
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Apply the response headers appropriate to a JSON API.
 
     The CSP is deliberately a lockdown rather than a page policy: this service
-    returns JSON, so nothing should ever be loaded or framed from a response.
-    HSTS is set only outside local/test, where TLS is not in play.
+    returns JSON, so nothing should ever be loaded or framed from a response. The one
+    exception is FastAPI's interactive docs in *local development*, whose Swagger UI
+    loads assets from a CDN — those pages get a narrowly relaxed CSP, and nothing
+    else does. HSTS is set only outside local/test, where TLS is not in play.
     """
 
     def __init__(self, app: Callable[..., Awaitable[None]], *, settings: Settings) -> None:
         super().__init__(app)
         self._send_hsts = settings.environment not in (Environment.LOCAL, Environment.TEST)
+        # Only local development serves /docs (production disables it) and only there
+        # is the CDN allowance acceptable; every other environment stays locked down.
+        self._relax_docs = settings.environment is Environment.LOCAL
 
     async def dispatch(self, request: Request, call_next: Handler) -> Response:
         response = await call_next(request)
@@ -98,9 +124,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         headers.setdefault("X-Content-Type-Options", "nosniff")
         headers.setdefault("X-Frame-Options", "DENY")
         headers.setdefault("Referrer-Policy", "no-referrer")
+        docs_page = self._relax_docs and request.url.path in _DOCS_PATHS
         headers.setdefault(
             "Content-Security-Policy",
-            "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+            _DOCS_CSP if docs_page else _STRICT_CSP,
         )
         headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
         headers.setdefault("Cross-Origin-Resource-Policy", "same-origin")

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="popup.css" />
+    <title>DOCURA</title>
+  </head>
+  <body>
+    <header>
+      <span class="brand">DOCURA</span>
+      <span id="state-pill" class="pill">…</span>
+    </header>
+
+    <p id="error" class="error" hidden></p>
+
+    <!-- Signed out: sign in with the existing DOCURA account. -->
+    <form id="signin" hidden>
+      <label>Email <input id="email" type="email" autocomplete="username" required /></label>
+      <label>Password <input id="password" type="password" autocomplete="current-password" required /></label>
+      <button type="submit">Sign in</button>
+    </form>
+
+    <!-- Signed in, inactive: activation is the explicit user action. -->
+    <section id="inactive" hidden>
+      <p class="who">Signed in as <strong id="who-inactive"></strong>.</p>
+      <p class="hint">DOCURA is not reading this page. Activate it to start a session on the current tab.</p>
+      <button id="activate" class="primary">Activate on this page</button>
+      <button id="signout-inactive" class="link">Sign out</button>
+    </section>
+
+    <!-- Active: a form session exists; stop is one click away. -->
+    <section id="active" hidden>
+      <p class="who">Active as <strong id="who-active"></strong>.</p>
+      <p class="hint">The green banner on the page shows DOCURA is active. It is not filling anything yet.</p>
+      <button id="stop" class="danger">Stop DOCURA</button>
+      <p class="session">Session <code id="session-id"></code></p>
+    </section>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

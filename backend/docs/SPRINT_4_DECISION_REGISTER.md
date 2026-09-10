@@ -989,6 +989,52 @@ A person legitimately holds several qualifications, each with its own year of pa
 
 **Blocking status:** **BLOCKED — REQUIREMENTS GAP** for the rules (G-14, G-15, G-16); **BLOCKED — EVALUATION REQUIRED** in that A-5 (studies S-1, S-4) is the specification's own means of settling the boundary; **READY** for the tier field, the raise-only invariant, and the configuration mechanism.
 
+## D-06.5 G-14 partial-resolution determination — 9 September 2026
+
+**Verification.** The D-06.1 quotes were re-checked **directly against `backend/step3.pdf`** (not against any secondary doc) before this determination. All wording in D-06.1 is confirmed accurate: FR-INF-007 (§1.5), the FR-SENS-001…007 block (§1.15), AR-DET-005, AR-AST-007, BR-020, NFR-MNT-004. No prior quote required correction. **`step3.pdf` is unchanged.**
+
+**G-14 splits into two halves, and only one is closable on current evidence.** This is the minimum determination supported by the requirements — no mapping, priority, threshold, or default is invented.
+
+### A. Direct requirements evidence — the tier *framework* (frozen; content-free)
+
+`step3.pdf` establishes the following about sensitivity, independently of any assumption:
+
+| Question asked of G-14 | What `step3.pdf` establishes | Source |
+| --- | --- | --- |
+| Tier names | Exactly three: **routine, sensitive, consequential** | FR-INF-007, FR-SENS-001 |
+| Unit of classification | The **attribute** (every attribute carries a tier) **and** the **detected form field** — two distinct classified units, kept distinct | FR-INF-007 (attribute); FR-SENS-001 ("both stored attributes and detected form fields") |
+| — is it document / action based? | **No.** Documents are not a classified unit here (that is **G-16**, unresolved); no requirement classifies an *action* by tier | FR-SENS-001 scope; G-16 |
+| How rules are represented | As a **reviewable rule set / reviewable list**, **deterministic**, **not inferred per session** | AR-DET-005 (MVP, MUST-strength), NFR-MNT-004 (SHOULD) |
+| Can a user raise a tier? | **Yes** — the user may raise an attribute's tier | FR-SENS-006 (SHOULD) |
+| Can a user lower a tier? | **Consequential can never be lowered by any actor** (a hard floor). Lowering of routine/sensitive is not otherwise addressed | FR-SENS-006, **BR-020** |
+| Assisted components | May **add** a sensitivity classification, **never remove** one | AR-AST-007 (MVP) |
+| Sensitive information | Masked by default in DOCURA's own interface, revealed on user action (SHOULD); never placed into a form without explicit, per-disclosure approval; the approval shows the exact value and receiving field; an approval never generalises | FR-SENS-004; FR-SENS-002/003/005, BR-005, BR-007 |
+| Consequential information | The immutable floor (above). `step3.pdf` states **no disclosure rule specific to consequential** beyond immutability; whether "sensitive information" in FR-SENS-002/BR-005 subsumes consequential is **not stated** and is **not assumed here** | BR-020; gap noted, not filled |
+
+**Frozen now (structure only, no policy chosen):** the three-tier enum; the two classified units (attribute, form field) held separate; the raise-only + consequential-floor invariants; the requirement that assignment be a reviewable, deterministic, configuration-held rule list; masking-by-default and per-disclosure-approval as behaviours attached to the *sensitive* tier once a value carries it. These are exactly the items D-06.3 already marks **READY**; this entry confirms they survive direct source re-verification.
+
+### B. Already-approved project decisions bearing on G-14
+
+- **G-13.9 (revised, D-05.8):** sensitivity tiers gate **G-13-B only**, not G-13-A — so the blocked half of G-14 does **not** block G-12 authoring or ground-truth annotation.
+- **G-02.7 / G-02 §8.2 (APPROVED):** because protection cannot be graduated by sensitivity, the corpus is protected at the highest level available. Unaffected by this determination.
+- **Vocabulary property 7** exists as an empty, present slot in `v0.1-draft` (PD-B) — the framework above is what that slot is a slot *for*; its value is the blocked content.
+
+### C. Engineering implications implementable without choosing policy
+
+Already enumerated in D-06.3 and unchanged: the tier enum, the raise-only/consequential-floor write-boundary invariant, and a configuration-held reviewable rule-list *mechanism*. **Not built by this entry** — this is documentation/decision work, and there is no tier *content* to place in a rule list yet, so building an empty one is premature (no approved decision requires it now).
+
+### D. Remains TBD — the tier *content* (the actual half of G-14 that gap G-14 names)
+
+**BLOCKED, and not closable on current evidence.** Which attribute (or form field) receives which tier is the routine/sensitive boundary the specification explicitly assigns to users: "This boundary must be set by users, not by us — it is assumption **A-5**", settled by studies **S-1** and **S-4**; §12.3 confirms A-5 is untested and load-bearing. No rule content is authored here. **No mapping such as Aadhaar=consequential / PAN=sensitive / DOB=sensitive is created — `step3.pdf` supports none of them.**
+
+### G-14 status: **PARTIALLY RESOLVED (option 2).**
+- **Closed:** the tier framework (Section A) — names, classified units, invariants, representation-as-reviewable-list, sensitive-tier behaviours. Frozen as structure.
+- **Remains open for A-5 / studies S-1, S-4:** the tier-assignment rule content.
+- **Not touched here, still independently required:** **G-15** (default tier for an uncovered attribute — a separate safety decision, deliberately not resolved) and **G-16** (document-level tier derivation).
+
+### Effect on G-13-B
+**G-13-B remains NOT MET.** Property 7 requires *every attribute to carry an assigned tier*; the assignment content is precisely the blocked half (D above), plus §12.3's A-5/A-7 gate on any build. Freezing the framework does not supply a single attribute's tier value, so **G-13-B is not advanced and must not be marked MET.** G-13-A is unaffected (already MET). No change is made to the G-13 status lines, which already read NOT MET for gate B — they remain correct.
+
 ---
 
 # D-07 — Off-device processing disclosure (NFR-PRIV-006)
@@ -1478,7 +1524,7 @@ Genuine gaps that engineering cannot safely close alone. Each requires a change 
 | **G-11** | Whether photograph and signature have structured information requirements is never stated. | §7.1, FR-OCR-004, FR-INF-007 | Determines whether extraction applies at all |
 | **G-12** | **No field definitions exist for any document type.** | FR-OCR-004, FR-OCR-005, NFR-MNT-001 | Defines what DOCURA reads from a person's identity documents |
 | **G-13** | **The canonical attribute vocabulary does not exist**, though FR-ACC-004 names it. **Definition APPROVED as a product decision (D-05.6, [`SPRINT_4_G13_CANONICAL_ATTRIBUTE_VOCABULARY.md`](SPRINT_4_G13_CANONICAL_ATTRIBUTE_VOCABULARY.md)) — the approval fixes the seven-property shape only; no attribute exists, and the gap in `step3.pdf` remains open and still needs the amendment. REVISED 6 September 2026 and the revision APPROVED 6 September 2026 — D-05.8 (G-13.2, G-13.5, G-13.9; new G-13.15; G-13.11's trigger clarified); G-13.3 preserved, no eighth property. **T1 contents authoring run 6 September 2026 — D-05.9: `v0.1-draft`, one proposed entry, nine candidates not authored. Completed D-05.10 (N-TEXT). PD-B APPROVED 7 September 2026 — D-05.11: the one entry, its one-attribute scope, and N-TEXT; this approves T1 content only and closes no gap. PD-A, PD-C, PD-D, PD-E APPROVED 8 September 2026 — D-05.12; X12 MET the same day — D-05.13; X15 CLOSED the same day — D-05.14 (fourth false-conflict attribution category applied at D-02 §11.6.1). **G-13-A is MET (8 Sep 2026).** The gap is still not closed — the §11 amendment (X16) is owed, and G-13-B (G-14/G-15) remains NOT MET.**** | FR-ACC-004, FR-INF-001/004/007/008, FR-SRCH-003, EC-019 | Defines what DOCURA knows about a person |
-| **G-14** | The sensitivity classification rules are not in `step3.pdf`; the referenced §02 Table 13.1 is an ASM-tagged working classification whose boundary A-5 says must be set by users. | FR-INF-007, FR-SENS-001, AR-DET-005, NFR-MNT-004 | Determines when the product interrupts a user |
+| **G-14** | The sensitivity classification rules are not in `step3.pdf`; the referenced §02 Table 13.1 is an ASM-tagged working classification whose boundary A-5 says must be set by users. **PARTIALLY RESOLVED 9 Sep 2026 (D-06.5): the tier *framework* — three names, attribute + form-field as the classified units, raise-only/consequential-floor invariants, reviewable-rule-list representation — is frozen on direct source evidence; the tier *assignment content* remains blocked on A-5 (studies S-1, S-4). G-14 gates G-13-B only.** | FR-INF-007, FR-SENS-001, AR-DET-005, NFR-MNT-004 | Determines when the product interrupts a user |
 | **G-15** | No default sensitivity tier for an attribute no rule covers. | FR-INF-007 | Safety-relevant default |
 | **G-16** | Document-level sensitivity is presupposed by FR-MATCH-009 and EC-011 but defined nowhere. | FR-SENS-001, FR-MATCH-009, EC-011 | Determines when approval is required for an attachment |
 | **G-17** | "Processing" in NFR-PRIV-006 is undefined, so it is unclear whether the obligation was already triggered at Sprint 3. | NFR-PRIV-006 | Determines whether a mandatory disclosure is currently outstanding |

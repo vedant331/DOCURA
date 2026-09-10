@@ -1,0 +1,10 @@
+{
+  "name": "docura-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "DOCURA browser extension core (M2). No runtime dependencies; tests use Node's built-in test runner.",
+  "scripts": {
+    "test": "node --test"
+  }
+}

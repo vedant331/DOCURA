@@ -1,0 +1,27 @@
+* { box-sizing: border-box; }
+body {
+  width: 300px;
+  margin: 0;
+  padding: 14px;
+  font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #1a1a1a;
+  background: #ffffff;
+}
+header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.brand { font-weight: 700; letter-spacing: 0.03em; }
+.pill {
+  font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+  background: #eceff1; color: #546e7a;
+}
+.pill.active { background: #0b6b3a; color: #fff; }
+.pill.inactive { background: #fff3e0; color: #b45309; }
+label { display: block; margin: 8px 0; font-size: 12px; color: #444; }
+input { width: 100%; padding: 7px 8px; margin-top: 3px; border: 1px solid #cfd8dc; border-radius: 6px; font: inherit; }
+button { width: 100%; padding: 9px; margin-top: 8px; border: 0; border-radius: 6px; font: inherit; font-weight: 600; cursor: pointer; }
+button.primary, form button { background: #0b6b3a; color: #fff; }
+button.danger { background: #b3261e; color: #fff; }
+button.link { background: none; color: #546e7a; font-weight: 500; text-decoration: underline; padding: 6px; }
+.who { margin: 4px 0; }
+.hint { color: #607d8b; font-size: 12px; margin: 6px 0 4px; }
+.session { color: #90a4ae; font-size: 11px; margin-top: 10px; }
+.error { background: #fdecea; color: #b3261e; padding: 8px; border-radius: 6px; margin: 0 0 8px; font-size: 12px; }

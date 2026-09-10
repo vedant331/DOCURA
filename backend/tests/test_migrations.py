@@ -107,6 +107,8 @@ class TestMigration:
                 "extraction_pages",
                 "extraction_blocks",
                 "attribute_observations",
+                "form_sessions",
+                "form_actions",
                 "alembic_version",
             } <= tables
 
@@ -219,17 +221,53 @@ class TestMigration:
                 "confidence",
                 "created_at",
             }
+
+            # M1: the form session — one authenticated user's session on a form, with
+            # a lifecycle state and a start/end time. No form URL and no third-party
+            # form content (BR-017, FR-AUD-006); a session is identified by its own id.
+            form_session_columns = {c["name"] for c in inspector.get_columns("form_sessions")}
+            assert form_session_columns == {
+                "id",
+                "user_id",
+                "state",
+                "created_at",
+                "ended_at",
+            }
+
+            # M1: the append-only audit entry (FR-AUD-001…006). It records what DOCURA
+            # did and the field it affected, references provenance by id, and points
+            # back at an earlier action for a reversal — no file bytes, storage key,
+            # checksum, extracted value, or third-party form content.
+            form_action_columns = {c["name"] for c in inspector.get_columns("form_actions")}
+            assert form_action_columns == {
+                "id",
+                "session_id",
+                "action_type",
+                "outcome",
+                "field_ref",
+                "source_document_id",
+                "source_observation_id",
+                "reverses_action_id",
+                "detail",
+                "created_at",
+            }
+            # The audit table has no column that could hold form or file content.
+            assert not (
+                form_action_columns
+                & {"value", "storage_key", "checksum_sha256", "content", "page_content"}
+            )
         finally:
             engine.dispose()
 
-    def test_no_later_sprint_tables_are_created(self, scratch_database: str) -> None:
-        """The schema is accounts, the vault, and the D-09 processing job — nothing more.
+    def test_no_later_milestone_tables_are_created(self, scratch_database: str) -> None:
+        """The schema stops exactly at M1 — nothing a later milestone will define.
 
-        This is the check that keeps OCR *output*, extracted attributes, and form
-        sessions out of the schema until the sprint that actually implements them. A
-        table added early is a shape committed to before the requirement that would
-        have defined it. ``processing_jobs`` (Sprint 4 D-09) is job machinery, not
-        extraction output, so it belongs; the attribute and form tables still do not.
+        A table added early is a shape committed to before the requirement that would
+        have defined it. As of M1 the schema is accounts, the vault, the D-09
+        processing job, the extraction/observation layers, and the form-session and
+        audit foundation. What is still absent is everything the form-action pipeline
+        will define — no fill/attach/approval *result* tables, no per-disclosure
+        approval record, no review artefact — because those milestones do not exist yet.
         """
         assert _run_alembic("upgrade", "head", dsn=scratch_database).returncode == 0
 
@@ -250,6 +288,8 @@ class TestMigration:
             "extraction_pages",
             "extraction_blocks",
             "attribute_observations",
+            "form_sessions",
+            "form_actions",
             "alembic_version",
         }
 

@@ -158,6 +158,34 @@ class AttributeNotFoundError(DocuraError):
     remediation = "Check the attribute identifier, or upload a document that provides it."
 
 
+class FormSessionNotFoundError(DocuraError):
+    """No form session with that id is readable by the requesting account.
+
+    404, and identical whether the id names nothing or names another account's
+    session — the same oracle-avoidance as :class:`DocumentNotFoundError`
+    (NFR-SEC-003). Ownership is a ``WHERE`` clause, never a post-load check.
+    """
+
+    status_code = status.HTTP_404_NOT_FOUND
+    title = "Form session not found"
+    detail = "No form session with that identifier is available to this account."
+    remediation = "Check the identifier against your form sessions and try again."
+
+
+class FormSessionNotActiveError(DocuraError):
+    """A lifecycle transition was requested on a session that has already ended.
+
+    A hand-back or stop applies to a live session; one already handed back, stopped,
+    or expired has no further transition (BR-016 — do nothing rather than pretend a
+    second ending happened). The history of the original ending is preserved.
+    """
+
+    status_code = status.HTTP_409_CONFLICT
+    title = "Form session already ended"
+    detail = "This form session has already ended and cannot change state again."
+    remediation = "Activate DOCURA again on the form to start a new session."
+
+
 class UnsupportedDocumentError(DocuraError):
     """The file is not one of the accepted types, or is not readable as one.
 
