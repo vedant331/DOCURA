@@ -38,22 +38,31 @@
   // isolated world; the watcher scans only the currently-present forms — the
   // foundation for multi-step forms, with no navigation behaviour invented.
   if (globalThis.__docuraWatcher) return; // a watcher is already running on this tab.
-  import(chrome.runtime.getURL("src/detect.js"))
-    .then(({ FormWatcher }) => {
+  Promise.all([
+    import(chrome.runtime.getURL("src/detect.js")),
+    import(chrome.runtime.getURL("src/readiness.js")),
+  ])
+    .then(([{ FormWatcher }, { computeReadiness }]) => {
       if (globalThis.__docuraWatcher) return;
       const watcher = new FormWatcher({
         root: document,
         // Latest snapshot only; stale enumerations are never retained (FR-FRM-007).
         onChange: (result) => {
           globalThis.__docuraForms = result;
+          // Deterministic readiness (M4) on the latest snapshot only. No field values are
+          // read and nothing is transmitted: with no approved form-field→attribute mapping
+          // the default resolver maps nothing, so the record is neither needed nor fetched
+          // and no personal data crosses into this world.
+          globalThis.__docuraReadiness = computeReadiness({ snapshot: result });
         },
       }).start();
       globalThis.__docuraWatcher = watcher;
-      // Called by background.js on stop/tab-close/sign-out: detection ceases at once.
+      // Called by background.js on stop/tab-close/sign-out: detection AND readiness cease.
       globalThis.__docuraTeardown = () => {
         watcher.stop();
         globalThis.__docuraWatcher = null;
         globalThis.__docuraForms = null;
+        globalThis.__docuraReadiness = null;
       };
     })
     .catch(() => {
