@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* DOCURA design tokens (APP-1 §6). One dark, monochrome/metallic system shared by the
+   authentication screens and the application shell. HSL channels so Tailwind's
+   `hsl(var(--x))` colours resolve. This is not a generic shadcn theme — it is tuned to
+   the Mercury / Neural Access reference: near-black ground, metallic accents, thin
+   low-contrast borders, high-contrast white primary actions. */
+:root {
+  --bg: 0 0% 2%;
+  --surface: 0 0% 5%;
+  --surface-2: 0 0% 8%;
+  --border: 0 0% 100% / 0.08;
+  --ring: 0 0% 88%;
+  --foreground: 0 0% 100%;
+  --muted: 0 0% 14%;
+  --muted-foreground: 0 0% 55%;
+  --mercury: 0 0% 88%;
+  --mercury-dark: 0 0% 40%;
+  --primary: 0 0% 100%;
+  --primary-foreground: 0 0% 0%;
+  --destructive: 0 72% 58%;
+  --destructive-foreground: 0 0% 100%;
+}
+
+/* The border token carries its own alpha, so map it through cleanly. */
+* {
+  border-color: hsl(var(--border));
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: hsl(var(--bg));
+  color: hsl(var(--foreground));
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* System / metadata label treatment used across auth and shell. */
+.label-system {
+  font-family: "Space Mono", ui-monospace, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  font-size: 0.625rem;
+  color: hsl(var(--muted-foreground));
+}
+
+/* Visible focus for keyboard users everywhere (APP-1 §8). */
+:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+/* Respect reduced-motion: the atmospheric background is decorative (APP-1 §5/§8). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
