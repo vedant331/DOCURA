@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { login, createSession, stopSession, me } from "../src/api.js";
+import { login, createSession, stopSession, me, recordAction } from "../src/api.js";
 
 const BASE = "http://backend.test";
 
@@ -56,4 +56,35 @@ test("stopSession targets the session's stop route", async () => {
 test("a non-2xx response throws with the backend's detail (so the caller stops)", async () => {
   const fetchImpl = fakeFetch(fail(401, { detail: "Not authenticated" }));
   await assert.rejects(() => me(BASE, "stale", fetchImpl), /Not authenticated/);
+});
+
+test("recordAction posts to /form-sessions/{id}/actions with the bearer token and JSON body", async () => {
+  const fetchImpl = fakeFetch(ok({ id: "action-1", action_type: "fill", outcome: "succeeded" }));
+  const action = {
+    action_type: "fill",
+    outcome: "succeeded",
+    field_ref: "#full_name",
+    document_id: "doc-1",
+    detail: "person.full_name",
+  };
+  const result = await recordAction(BASE, "tok-123", "sess-9", action, fetchImpl);
+
+  const { url, opts } = fetchImpl.calls[0];
+  assert.equal(url, `${BASE}/form-sessions/sess-9/actions`);
+  assert.equal(opts.method, "POST");
+  assert.equal(opts.headers.Authorization, "Bearer tok-123");
+  assert.equal(opts.headers["Content-Type"], "application/json");
+  // The serialized body carries exactly the action given — and never a field value.
+  const sent = JSON.parse(opts.body);
+  assert.deepEqual(sent, action);
+  assert.ok(!("value" in sent), "audit payload must never contain a field value");
+  assert.equal(result.id, "action-1");
+});
+
+test("recordAction throws on a non-2xx response so the worker can report a failure, not proceed", async () => {
+  const fetchImpl = fakeFetch(fail(409, { detail: "This form session has already ended." }));
+  await assert.rejects(
+    () => recordAction(BASE, "tok", "sess", { action_type: "fill", outcome: "succeeded" }, fetchImpl),
+    /already ended/,
+  );
 });

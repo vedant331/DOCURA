@@ -59,19 +59,65 @@ const badge = {
 
 const controller = new DocuraController({ base: API_BASE, api, storage, injector, badge });
 
+// Transient, in-memory list of sensitive fields on the active page awaiting the user's
+// explicit approval (M10 §13). Reported by the content script, shown by the popup, never
+// persisted and cleared the moment the session ends (BR-007). Holds no raw value.
+let pendingApprovals = [];
+
 async function activeTabId() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   return tab?.id;
 }
 
-// Popup commands. Each resolves to a state descriptor the popup renders.
+// The content script (isolated world, NO token) asks the worker to fetch the user's record.
+// The token never leaves the worker; only the user's own attribute values return, and only
+// while a session is active on this account (M10 §8/§20).
+async function fetchRecordForActiveSession() {
+  const state = await storage.load();
+  if (!state?.token) return { error: "Sign in to DOCURA first." };
+  if (!state?.session) return { error: "No active DOCURA session." };
+  try {
+    return { record: await api.getRecord(API_BASE, state.token) };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+// The content script asks the worker to record one in-session action (M15). The token and the
+// session id stay in the worker: the content script never sees either. The payload is rebuilt
+// from a strict whitelist here, so ONLY contract fields are ever transmitted — a value (or any
+// other stray field) added upstream by mistake cannot reach the backend. A failure to record
+// is returned, never thrown, and never blocks the underlying (already-safe) action (M15 §7).
+async function recordActionForActiveSession(action) {
+  const state = await storage.load();
+  if (!state?.token || !state?.session) return { error: "No active DOCURA session." };
+  const a = action ?? {};
+  const payload = {
+    action_type: a.action_type,
+    outcome: a.outcome,
+    field_ref: a.field_ref ?? null,
+    document_id: a.document_id ?? null,
+    observation_id: a.observation_id ?? null,
+    reverses_action_id: a.reverses_action_id ?? null,
+    detail: a.detail ?? null,
+  };
+  try {
+    const recorded = await api.recordAction(API_BASE, state.token, state.session.sessionId, payload);
+    return { ok: true, id: recorded.id };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+// Popup + content-script commands. Each resolves to a response the sender renders/uses.
 async function handle(message) {
   switch (message?.type) {
     case "getState":
-      return controller.getState();
+      return { ...(await controller.getState()), pending: pendingApprovals };
     case "signIn":
       return controller.signIn(message.email, message.password);
     case "signOut":
+      pendingApprovals = [];
       return controller.signOut();
     case "activate": {
       const tabId = await activeTabId();
@@ -79,7 +125,34 @@ async function handle(message) {
       return controller.activate(tabId);
     }
     case "stop":
+      pendingApprovals = [];
       return controller.stop();
+
+    // ---- M10 record access + sensitive approval (content ↔ worker ↔ popup) ----
+    case "getRecord":
+      return fetchRecordForActiveSession();
+    case "recordAction":
+      return recordActionForActiveSession(message.action);
+    case "reportPending":
+      // The content script reports which sensitive fields await approval (fieldId/attribute
+      // only — never a value). Replaces the list wholesale (latest snapshot only).
+      pendingApprovals = Array.isArray(message.pending) ? message.pending : [];
+      return { ok: true };
+    case "approve": {
+      // The user approved one disclosure in the trusted popup. Tell the active tab to grant
+      // the exact-scope approval and fill that one field. Approval never leaves this session.
+      const state = await storage.load();
+      const tabId = state?.session?.tabId;
+      if (tabId != null) {
+        try {
+          await chrome.tabs.sendMessage(tabId, { type: "approveField", fieldId: message.fieldId });
+        } catch {
+          /* tab gone; nothing to fill */
+        }
+      }
+      pendingApprovals = pendingApprovals.filter((p) => p.fieldId !== message.fieldId);
+      return { ...(await controller.getState()), pending: pendingApprovals };
+    }
     default:
       return { status: "signed_out", error: "Unknown command." };
   }
@@ -92,5 +165,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 // If the activated tab closes, end the session so nothing lingers.
 chrome.tabs.onRemoved.addListener((tabId) => {
+  pendingApprovals = [];
   void controller.handleTabClosed(tabId);
 });

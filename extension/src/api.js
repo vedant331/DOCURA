@@ -55,6 +55,28 @@ export async function logout(base, token, fetchImpl = fetch) {
   );
 }
 
+// The authenticated user's structured record (M10). Reuses the SAME bearer token and the
+// SAME endpoint the web app reads (GET /record/attributes). Token-scoped on the backend, so
+// this only ever returns the caller's own attributes — no user id is sent, and none is trusted.
+export async function getRecord(base, token, fetchImpl = fetch) {
+  return readOrThrow(await fetchImpl(`${base}/record/attributes`, { headers: authHeaders(token) }));
+}
+
+// Record one in-session action DOCURA performed, into the session's audit history
+// (M15 — POST /form-sessions/{id}/actions, FR-AUD-001…003). The backend contract accepts
+// a field HANDLE and provenance REFERENCES only; it never stores a field value or page
+// content. `action` must already be the contract shape (built by the caller); this only
+// carries the bearer token, exactly like every other authenticated call.
+export async function recordAction(base, token, sessionId, action, fetchImpl = fetch) {
+  return readOrThrow(
+    await fetchImpl(`${base}/form-sessions/${sessionId}/actions`, {
+      method: "POST",
+      headers: { ...authHeaders(token), "Content-Type": "application/json" },
+      body: JSON.stringify(action),
+    }),
+  );
+}
+
 // Explicit activation: open a form session (M1 POST /form-sessions). Sends no page
 // content — activation is the only thing being asserted. Returns the FormSession.
 export async function createSession(base, token, fetchImpl = fetch) {

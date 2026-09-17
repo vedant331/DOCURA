@@ -44,54 +44,159 @@
     import(chrome.runtime.getURL("src/retrieval.js")),
     import(chrome.runtime.getURL("src/sensitivity.js")),
     import(chrome.runtime.getURL("src/matching.js")),
+    import(chrome.runtime.getURL("src/autofill.js")),
+    import(chrome.runtime.getURL("src/mapping.js")),
   ])
-    .then(([{ FormWatcher }, { computeReadiness }, { computeRetrieval }, { computeReview, newApprovalLedger }, { computeMatching }]) => {
-      if (globalThis.__docuraWatcher) return;
-      // Session-scoped, in-memory approval ledger (BR-007: never persisted or generalised).
-      const approvals = (globalThis.__docuraApprovals = newApprovalLedger());
-      const watcher = new FormWatcher({
-        root: document,
-        // Latest snapshot only; stale enumerations are never retained (FR-FRM-007).
-        onChange: (result) => {
-          globalThis.__docuraForms = result;
-          // Deterministic readiness (M4) on the latest snapshot only. No field values are
-          // read and nothing is transmitted: with no approved form-field→attribute mapping
-          // the default resolver maps nothing, so the record is neither needed nor fetched
-          // and no personal data crosses into this world.
-          globalThis.__docuraReadiness = computeReadiness({ snapshot: result });
-          // Deterministic retrieval + ambiguity/ask (M5) on the same latest snapshot. Same
-          // frozen boundary: with no approved mapping the default resolver maps nothing, so no
-          // record is fetched and no personal value ever crosses into this world. M5 only
-          // surfaces a decision (available/ambiguous/conflict/unavailable) — it never fills.
-          globalThis.__docuraRetrieval = computeRetrieval({ snapshot: result });
-          // Sensitive-approval + review (M6). Same frozen boundary: production seams classify
-          // nothing (tier unknown, no mapping) so nothing is disclosable and no value is read
-          // or transmitted. It only surfaces a review — it never fills, submits, or operates a
-          // declaration control. The session approval ledger scopes any future approval to one
-          // disclosure and is cleared on teardown.
-          globalThis.__docuraReview = computeReview({ snapshot: result, approvals });
-          // Deterministic document matching + preparation (M7) on the same latest snapshot.
-          // Same frozen boundary: with no approved matcher/threshold/tier the production seams
-          // resolve nothing, so no document is fetched, every file-upload field is `unresolved`,
-          // and no personal data crosses into this world. It only surfaces a matching/preparation
-          // decision and a preview target — it never attaches a document, fills, or submits.
-          globalThis.__docuraMatching = computeMatching({ snapshot: result, approvals });
+    .then(
+      ([
+        { FormWatcher },
+        { computeReadiness },
+        { computeRetrieval },
+        { computeReview, newApprovalLedger, grantApproval },
+        { computeMatching },
+        {
+          computeFillPlan,
+          applyFillPlan,
+          pendingApprovals,
+          fillAuditAction,
+          approvalRequestAuditAction,
+          approvalDecisionAuditAction,
         },
-      }).start();
-      globalThis.__docuraWatcher = watcher;
-      // Called by background.js on stop/tab-close/sign-out: detection AND readiness cease.
-      globalThis.__docuraTeardown = () => {
-        watcher.stop();
-        globalThis.__docuraWatcher = null;
-        globalThis.__docuraForms = null;
-        globalThis.__docuraReadiness = null;
-        globalThis.__docuraRetrieval = null;
-        globalThis.__docuraReview = null;
-        globalThis.__docuraMatching = null;
-        approvals.clear(); // no approval survives the session (BR-007).
-        globalThis.__docuraApprovals = null;
-      };
-    })
+        { resolveField },
+      ]) => {
+        if (globalThis.__docuraWatcher) return;
+        // Session-scoped, in-memory approval ledger (BR-007: never persisted or generalised).
+        const approvals = (globalThis.__docuraApprovals = newApprovalLedger());
+        // The user's structured record, fetched via the worker (which holds the token). Until it
+        // arrives it is null, so nothing is filled. userId/sessionId stay null: the ledger's own
+        // lifetime IS the session, so its entries are already session-isolated.
+        let record = null;
+        let latest = null;
+        const context = { userId: null, sessionId: null };
+
+        // Audit (M15): report each real in-session action to the worker, which posts it to the
+        // backend with the token + session id it alone holds. `reported` de-duplicates across
+        // rescans so one effect is one audit entry. NEVER carries a field value or page content —
+        // only a field handle, the canonical attribute id, and (for a fill) the owned source
+        // document reference. Fire-and-forget: an audit failure never blocks or weakens the
+        // already-safe action it records (M15 §7), and lifecycle (hand_back/stop) is never sent
+        // here — those keep their own endpoints.
+        const reported = new Set();
+        const report = (action) => {
+          chrome.runtime.sendMessage({ type: "recordAction", action }).catch(() => {});
+        };
+        const reportOnce = (key, action) => {
+          if (reported.has(key)) return;
+          reported.add(key);
+          report(action);
+        };
+
+        // Safe autofill (M10): plan from the approved mapping + the record, then write only the
+        // "fill" actions into the DOM. Sensitive fields wait for approval; unmapped, ambiguous,
+        // conflicting, and declaration fields are left untouched.
+        const runFill = () => {
+          if (!latest) return;
+          const plan = computeFillPlan({ snapshot: latest, record, approvals, context });
+          globalThis.__docuraFillPlan = plan;
+          const { filled, failed } = applyFillPlan({ plan, root: document, approvals });
+          globalThis.__docuraFills = filled;
+
+          // Audit each real fill (FR-AUD-001): a value was placed in a field. Reference only.
+          for (const f of filled) {
+            reportOnce(`fill:${f.fieldId}`, fillAuditAction(f, { outcome: "succeeded" }));
+          }
+          // A fill DOCURA intended but could not perform is auditable as a failure.
+          for (const f of failed) {
+            reportOnce(`fillfail:${f.fieldId}`, fillAuditAction(f, { outcome: "failed" }));
+          }
+
+          // Sensitive fields awaiting approval. Tell the trusted popup (ids only — never a
+          // value), and audit that DOCURA asked for approval (FR-AUD-003, approval_request).
+          const pend = pendingApprovals(plan);
+          chrome.runtime.sendMessage({ type: "reportPending", pending: pend }).catch(() => {});
+          for (const p of pend) {
+            reportOnce(`req:${p.fieldId}`, approvalRequestAuditAction(p));
+          }
+        };
+
+        const recompute = (result) => {
+          latest = result;
+          globalThis.__docuraForms = result;
+          // M10: the APPROVED mapping is now injected, and the user's record is supplied, so
+          // supported fields resolve to a value. Everything else stays unknown/untouched.
+          globalThis.__docuraReadiness = computeReadiness({ snapshot: result, record, resolveField });
+          globalThis.__docuraRetrieval = computeRetrieval({ snapshot: result, record, resolveField });
+          globalThis.__docuraReview = computeReview({ snapshot: result, record, resolveField, approvals });
+          // Document matching stays at its frozen default (no approved matcher/threshold).
+          globalThis.__docuraMatching = computeMatching({ snapshot: result, approvals });
+          runFill();
+        };
+
+        const watcher = new FormWatcher({
+          root: document,
+          // Latest snapshot only; stale enumerations are never retained (FR-FRM-007).
+          onChange: recompute,
+        }).start();
+        globalThis.__docuraWatcher = watcher;
+
+        // Fetch the record once (token never leaves the worker). On arrival, recompute so the
+        // safe fills run. On failure the record stays null and nothing is filled (fail inaction).
+        chrome.runtime
+          .sendMessage({ type: "getRecord" })
+          .then((res) => {
+            record = res && res.record ? res.record : null;
+            if (latest) recompute(latest);
+          })
+          .catch(() => {
+            /* backend unreachable / stale token: no record, nothing filled */
+          });
+
+        // The user approved one disclosure in the trusted popup: grant the exact-scope approval
+        // for this field's available value, then fill just that one field (one-time, BR-005/007).
+        const onApprove = (msg) => {
+          if (msg?.type !== "approveField" || !latest) return;
+          const plan = computeFillPlan({ snapshot: latest, record, approvals, context });
+          for (const form of plan.forms) {
+            for (const f of form.fields) {
+              if (f.fieldId === msg.fieldId && f.action === "approval_required") {
+                grantApproval(approvals, {
+                  ...context,
+                  formId: form.formId,
+                  fieldId: f.fieldId,
+                  canonicalIdentifier: f.canonicalIdentifier,
+                  value: f.value,
+                });
+                // Audit the user's approval decision (FR-AUD-003). The subsequent fill of this
+                // field is audited by runFill(). Value is never included.
+                reportOnce(`decision:${f.fieldId}`, approvalDecisionAuditAction(f));
+              }
+            }
+          }
+          runFill();
+        };
+        chrome.runtime.onMessage.addListener(onApprove);
+
+        // Called by background.js on stop/tab-close/sign-out: all activity ceases. DOCURA-placed
+        // values are LEFT in the form (EC-017); only DOCURA's own state is cleared.
+        globalThis.__docuraTeardown = () => {
+          watcher.stop();
+          chrome.runtime.onMessage.removeListener(onApprove);
+          globalThis.__docuraWatcher = null;
+          globalThis.__docuraForms = null;
+          globalThis.__docuraReadiness = null;
+          globalThis.__docuraRetrieval = null;
+          globalThis.__docuraReview = null;
+          globalThis.__docuraMatching = null;
+          globalThis.__docuraFillPlan = null;
+          globalThis.__docuraFills = null;
+          approvals.clear(); // no approval survives the session (BR-007).
+          globalThis.__docuraApprovals = null;
+          reported.clear(); // audit de-dup is session-scoped; nothing survives teardown.
+          record = null;
+          chrome.runtime.sendMessage({ type: "reportPending", pending: [] }).catch(() => {});
+        };
+      },
+    )
     .catch(() => {
       /* detection module unavailable; the indicator and activation are unaffected */
     });
