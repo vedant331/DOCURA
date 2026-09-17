@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DOCURA — M17 semantic label validation (dev-only)</title>
+    <style>
+      body { font: 15px/1.5 system-ui, -apple-system, Segoe UI, sans-serif; max-width: 720px; margin: 2.5rem auto; padding: 0 1rem 4rem; color: #111; }
+      h1 { font-size: 1.25rem; } label { display: block; margin: 1rem 0 .2rem; font-weight: 600; }
+      input { display: block; padding: .4rem; min-width: 300px; }
+      .note { background: #eef6ff; border: 1px solid #a9c7ee; padding: .75rem 1rem; border-radius: 6px; font-size: .85rem; }
+      code { background: #f2f2f2; padding: 0 .25rem; }
+    </style>
+  </head>
+  <body>
+    <h1>M17 semantic label validation</h1>
+
+    <!--
+      DEV-ONLY, LOCAL manual test fixture for M17 (DOM semantic field metadata capture).
+      The meaning of each field lives ONLY in its human label / aria-label — the id and name
+      are deliberately OPAQUE (field_123, field_456, field_789), so this proves detection reads
+      the label a user sees, not the identifier. The visible labels are ordinary human labels
+      ("Full Name", "Date of Birth", "Email Address") — never canonical ids like person.full_name.
+
+      The form id is NOT the controlled form ("mca-mock"), so DOCURA performs NO autofill here.
+      This page validates DETECTION metadata only; nothing is filled, nothing is sent anywhere.
+    -->
+    <p class="note">
+      Dev-only. Load the DOCURA extension, open this page, click <b>Activate on this page</b> in the
+      popup, then open DevTools → Console, switch the console context dropdown to the
+      <b>DOCURA</b> content script, and run the inspection command from the milestone notes.
+      Meaning is in the label only (opaque id/name); this form is not the controlled form, so
+      nothing is auto-filled.
+    </p>
+
+    <form id="demo-application-form" name="demo-application-form">
+      <label for="dob">Date of Birth</label>
+      <input id="dob" name="field_123" type="date" />
+
+      <label for="name">Full Name</label>
+      <input id="name" name="field_456" type="text" />
+
+      <!-- Pure aria-label example: NO associated <label>, so the accessible name is the
+           aria-label only. The <p> below is a plain caption (no for=), not an association. -->
+      <p style="margin:1rem 0 .2rem;font-weight:600">Email (accessible name via aria-label)</p>
+      <input id="email_test" name="field_789" type="text" aria-label="Email Address" />
+    </form>
+  </body>
+</html>

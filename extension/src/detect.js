@@ -5,9 +5,10 @@
 //
 // Hard boundaries this module keeps (FR-FRM safety):
 //   * It captures field *metadata* only — identifier, type, required, declared
-//     constraints, form association. It never reads `.value` or any entered text,
-//     and it never captures option/choice values (that would be interpretation and
-//     is a later milestone).
+//     constraints, form association, and (M17) value-free semantic label metadata
+//     (label / aria-label / aria-labelledby / placeholder / title). It never reads
+//     `.value`, `defaultValue`, any entered text, option/choice values, innerHTML/
+//     outerHTML, or unrelated page text.
 //   * It is a pure function of the DOM plus a thin observer wrapper. Nothing here
 //     talks to the backend; M3 transmits no field data.
 //
@@ -29,6 +30,77 @@ const SIZE_ATTRS = ["data-max-size", "data-maxsize", "data-max-file-size"];
 function attr(el, name) {
   const v = el.getAttribute ? el.getAttribute(name) : null;
   return v === null || v === undefined ? null : v;
+}
+
+// Compact, value-free text: collapse whitespace, trim, cap length, null when empty. The cap
+// keeps metadata small and defends against a pathological wrapping label (M17 §3).
+const MAX_LABEL_LEN = 300;
+function normalizeText(raw) {
+  if (raw === null || raw === undefined) return null;
+  const t = String(raw).replace(/\s+/g, " ").trim();
+  if (!t) return null;
+  return t.length > MAX_LABEL_LEN ? t.slice(0, MAX_LABEL_LEN) : t;
+}
+
+// A <label>'s accessible text. `textContent` includes descendant text nodes but NOT a nested
+// input's `.value` (form controls contribute no text nodes), so this is value-free by
+// construction — a wrapped `<label>DOB <input value="secret"></label>` yields "DOB" only.
+function labelText(labelEl) {
+  return labelEl ? normalizeText(labelEl.textContent) : null;
+}
+
+// Escape an id for a CSS attribute selector; CSS.escape in the browser, a minimal fallback
+// (quotes/backslashes) under the test fakes.
+function cssEscapeId(id) {
+  if (typeof CSS !== "undefined" && typeof CSS.escape === "function") return CSS.escape(id);
+  return String(id).replace(/["\\]/g, "\\$&");
+}
+
+// The explicit (<label for=id>) or wrapping (<label>…<input>…</label>) label text, or null.
+// Prefers the element's native `labels` collection (which reflects both patterns), then falls
+// back to an owner-document `label[for]` lookup, then to the nearest ancestor <label>. Each
+// step is guarded so the pure describeField fakes (which expose none of these) never throw.
+function resolveLabel(el) {
+  if (el.labels && el.labels.length) return labelText(el.labels[0]);
+  const id = el.id || null;
+  const doc = el.ownerDocument;
+  if (id && doc && typeof doc.querySelector === "function") {
+    const explicit = doc.querySelector(`label[for="${cssEscapeId(id)}"]`);
+    if (explicit) return labelText(explicit);
+  }
+  if (typeof el.closest === "function") {
+    const wrapping = el.closest("label");
+    if (wrapping) return labelText(wrapping);
+  }
+  return null;
+}
+
+// aria-labelledby: resolve each referenced element's text (space-joined), value-free.
+function resolveAriaLabelledBy(el) {
+  const ids = attr(el, "aria-labelledby");
+  if (!ids) return null;
+  const doc = el.ownerDocument;
+  if (!doc || typeof doc.getElementById !== "function") return null;
+  const parts = [];
+  for (const id of ids.split(/\s+/).filter(Boolean)) {
+    const ref = doc.getElementById(id);
+    const text = ref ? normalizeText(ref.textContent) : null;
+    if (text) parts.push(text);
+  }
+  return parts.length ? normalizeText(parts.join(" ")) : null;
+}
+
+// Value-free semantic label metadata (M17). Distinct sources are kept separate so the
+// interpreter can prioritise an accessible label over a placeholder/title (M17 §4). NEVER
+// reads `.value`, `defaultValue`, innerHTML/outerHTML, or unrelated page text.
+function collectSemantics(el) {
+  return {
+    label: resolveLabel(el),
+    ariaLabel: normalizeText(attr(el, "aria-label")),
+    ariaLabelledBy: resolveAriaLabelledBy(el),
+    placeholder: normalizeText(attr(el, "placeholder")),
+    title: normalizeText(attr(el, "title")),
+  };
 }
 
 function toInt(v) {
@@ -86,6 +158,10 @@ export function describeField(el) {
     type,
     required,
     constraints: collectConstraints(el),
+    // Value-free semantic label metadata (M17): label / ariaLabel / ariaLabelledBy /
+    // placeholder / title, each null when absent. Spread at the top level so the interpreter
+    // reads field.label etc. directly. Never a field value.
+    ...collectSemantics(el),
   };
 }
 
@@ -144,6 +220,8 @@ export class FormWatcher {
       attributeFilter: [
         "type", "name", "id", "required", "aria-required", "disabled", "form",
         "pattern", "min", "max", "step", "minlength", "maxlength", "accept", "multiple",
+        // M17: semantic label sources, so a change to a field's accessible label re-scans.
+        "aria-label", "aria-labelledby", "placeholder", "title",
       ],
     });
     return this;

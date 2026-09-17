@@ -68,14 +68,7 @@ const DEFAULT_INDEX = buildIndex(CONTROLLED_ALIASES);
 // ambiguous  → more than one distinct approved meaning matched (e.g. label and id disagree);
 //              candidates lists them; NOTHING is auto-chosen (M16 §7).
 // unknown    → no approved meaning matched; the field is left for policy to leave untouched.
-export function interpretField(field, { index = DEFAULT_INDEX } = {}) {
-  const fieldRef = field?.id ?? field?.fieldId ?? field?.name ?? null;
-
-  // Value-free label sources only: an explicit label (a future detection layer may capture
-  // one), then the field's name and id. NEVER the field's value or any page content.
-  // EXACT match after normalisation — never substring, prefix, or fuzzy matching, so
-  // "user full name" or "fullname" do not accidentally resolve to `person.full_name`.
-  const sources = [field?.label, field?.name, field?.id, field?.fieldId];
+function matchSources(sources, index) {
   const matched = new Set();
   for (const source of sources) {
     const norm = normalizeLabel(source);
@@ -83,6 +76,22 @@ export function interpretField(field, { index = DEFAULT_INDEX } = {}) {
     const hit = index.get(norm);
     if (hit) matched.add(hit);
   }
+  return matched;
+}
+
+export function interpretField(field, { index = DEFAULT_INDEX } = {}) {
+  const fieldRef = field?.id ?? field?.fieldId ?? field?.name ?? null;
+
+  // Value-free label sources only (M17): the accessible label the user actually sees
+  // (label / aria-label / aria-labelledby) and the field's name/id are PRIMARY; placeholder
+  // and title are weak hints consulted ONLY when nothing primary matches, so a placeholder/
+  // title can never override an explicit accessible label (M17 §4). NEVER the field's value or
+  // page content. EXACT match after normalisation — never substring, prefix, or fuzzy — so
+  // "user full name" or "fullname" do not accidentally resolve to `person.full_name`.
+  const primary = [field?.label, field?.ariaLabel, field?.ariaLabelledBy, field?.name, field?.id, field?.fieldId];
+  const secondary = [field?.placeholder, field?.title];
+  let matched = matchSources(primary, index);
+  if (matched.size === 0) matched = matchSources(secondary, index);
 
   if (matched.size === 0) {
     return {
