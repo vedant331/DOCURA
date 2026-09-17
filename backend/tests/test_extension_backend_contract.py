@@ -113,12 +113,17 @@ class TestIsolationAndForgery:
             )
         ).status_code == 404
 
-    def test_no_endpoint_lets_a_client_forge_history(self, auth_app: FastAPI) -> None:
-        """The only writes to a session are activate, stop, and hand-back.
+    def test_the_form_session_write_surface_is_exactly_intended(self, auth_app: FastAPI) -> None:
+        """The write surface on /form-sessions is exactly the four intended routes.
 
-        There is deliberately no route to append an arbitrary FormAction — history is
-        written by DOCURA's own logic, never posted by a client. The audit *reader*
-        (``GET /form-sessions/{id}/actions``) is read-only.
+        Activation, stop, and hand-back are lifecycle transitions written by DOCURA's
+        own logic. ``POST /form-sessions/{id}/actions`` records the in-session effects
+        the extension performs on the page (fill/select/attach/ask/approval/override) so
+        they are auditable (FR-AUD-001…003) — but it cannot forge history: it is
+        owner-scoped, ACTIVE-session-only, refuses lifecycle action types, and validates
+        every referenced id as the caller's own (behavioural coverage:
+        ``test_form_sessions.py::TestRecordAction``). This assertion guards against any
+        *unexpected* write route appearing — the set is closed, not open.
         """
         paths = auth_app.openapi()["paths"]
         writing = {"post", "put", "patch", "delete"}
@@ -133,7 +138,8 @@ class TestIsolationAndForgery:
             ("/form-sessions", "post"),
             ("/form-sessions/{session_id}/hand-back", "post"),
             ("/form-sessions/{session_id}/stop", "post"),
+            ("/form-sessions/{session_id}/actions", "post"),
         }
-        # The history route exists only as a read.
+        # The history route is a read plus the owner-scoped append; nothing else.
         actions = paths["/form-sessions/{session_id}/actions"]
-        assert set(actions) == {"get"}
+        assert set(actions) == {"get", "post"}
