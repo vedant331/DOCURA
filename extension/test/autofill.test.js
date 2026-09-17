@@ -342,3 +342,26 @@ test("M15 applyFillPlan reports a failed fill when the target element is gone", 
   // The failed record carries the reference, never the value written.
   assert.ok(!("value" in fillAuditAction(failed[0], { outcome: "failed" })));
 });
+
+// ---- M16: interpretation is separate from authorization -----------------------
+
+test("M16 §8 — an interpreted-but-unpolicied field is resolved yet left untouched", () => {
+  // On the controlled form, a field whose id normalises to an approved alias ("name") gets a
+  // MEANING from the interpreter, but it is not a controlled-form policy field — so it must be
+  // left untouched. Interpretation never authorises a fill on its own.
+  const form = { id: "mca-mock", getAttribute: (k) => (k === "name" ? "mca-mock" : null) };
+  const node = el({ type: "text", id: "name", name: "name" });
+  node.form = form;
+  const byId = new Map([["name", node]]);
+  const root = {
+    querySelectorAll: () => [node],
+    getElementById: (i) => byId.get(i) ?? null,
+    querySelector: () => node,
+  };
+  const plan = computeFillPlan({ snapshot: scanForms(root), record: recordAvailable("Test User"), approvals: newApprovalLedger(), context: CONTEXT });
+  const entry = plan.forms[0].fields.find((f) => f.fieldId === "name");
+  assert.equal(entry.canonicalIdentifier, "person.full_name"); // interpreter gave it meaning
+  assert.equal(entry.action, "untouched"); // but policy leaves it alone
+  applyFillPlan({ plan, root });
+  assert.equal(node.value, ""); // never filled
+});
