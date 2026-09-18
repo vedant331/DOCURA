@@ -35,9 +35,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import BinaryIO, Protocol, runtime_checkable
+from typing import BinaryIO, Protocol, assert_never, runtime_checkable
 
-from app.core.config import Settings
+from app.core.config import ConfigurationError, OcrEngine, Settings
 from app.core.errors import ExtractionNotConfiguredError
 from app.core.logging import get_logger
 
@@ -252,17 +252,7 @@ class UnconfiguredExtractor:
         raise ExtractionNotConfiguredError
 
 
-def build_document_extractor(settings: Settings) -> DocumentExtractor:
-    """Construct the configured extractor.
-
-    This is the plug point. When the held-out evaluation (AR-AST-008, study S-6)
-    names an engine, its implementation is added beside
-    :class:`UnconfiguredExtractor` and selected here — a change to this function and
-    to nothing above it. No engine may be imported outside this module.
-
-    The engine is deliberately not selectable by configuration yet: a setting whose
-    only valid value is "none" would describe a choice that has not been made.
-    """
+def _unconfigured(settings: Settings) -> DocumentExtractor:
     extractor = UnconfiguredExtractor()
     logger.info(
         "extraction.engine_unconfigured",
@@ -271,3 +261,47 @@ def build_document_extractor(settings: Settings) -> DocumentExtractor:
         environment=settings.environment.value,
     )
     return extractor
+
+
+def build_document_extractor(settings: Settings) -> DocumentExtractor:
+    """Construct the configured extractor.
+
+    This is the plug point. **The default and production posture is the unconfigured
+    extractor**: no engine is selected until the held-out evaluation (AR-AST-008, study S-6)
+    names one, at which point the selected implementation is added beside
+    :class:`UnconfiguredExtractor` and returned here — a change to this function and to nothing
+    above it.
+
+    ``DOCURA_OCR_ENGINE=tesseract`` is a **dev/evaluation opt-in only** (M23): it runs the M20/M21
+    Tesseract candidate through the normal pipeline for local technical testing. It does **not**
+    select Tesseract for production, and the default stays unconfigured. The candidate adapter
+    lives outside the ``app`` package and is imported lazily here, so no OCR-library knowledge
+    enters the application's import surface. If the opt-in is set but the candidate's dependency
+    is not installed, this raises a configuration error rather than silently falling back — the
+    absence of the requested engine is loud, never masked.
+    """
+    if settings.ocr_engine is OcrEngine.UNCONFIGURED:
+        return _unconfigured(settings)
+
+    if settings.ocr_engine is OcrEngine.TESSERACT:
+        from ocr_candidates.tesseract_adapter import build_tesseract_extractor
+
+        extractor = build_tesseract_extractor(settings)
+        if not extractor.is_available():
+            msg = (
+                "DOCURA_OCR_ENGINE=tesseract, but the Tesseract candidate is not available "
+                "(install pytesseract, Pillow, pypdfium2, and the Tesseract binary). This is a "
+                "dev/evaluation-only engine; unset DOCURA_OCR_ENGINE to use the default."
+            )
+            raise ConfigurationError(msg)
+        logger.info(
+            "extraction.engine_dev_candidate",
+            engine=extractor.name,
+            reason="m23_dev_evaluation_opt_in_not_production_selection",
+            environment=settings.environment.value,
+        )
+        return extractor
+
+    # Exhaustive today; if a future OcrEngine member is added without a builder branch, mypy
+    # flags this and it fails loudly at runtime — never a silent fallback to a working engine.
+    assert_never(settings.ocr_engine)

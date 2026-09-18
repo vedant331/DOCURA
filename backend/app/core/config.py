@@ -42,6 +42,20 @@ class LogLevel(StrEnum):
     CRITICAL = "CRITICAL"
 
 
+class OcrEngine(StrEnum):
+    """Which extraction engine :func:`build_document_extractor` constructs.
+
+    The default is ``UNCONFIGURED`` — the production posture (D-01): no engine is selected
+    until the S-6 held-out evaluation reports (AR-AST-008). ``TESSERACT`` is a **dev/evaluation
+    opt-in only** that runs the M20/M21 candidate through the normal pipeline for local technical
+    testing; it does **not** make Tesseract the production engine. An unrecognised value is a
+    startup configuration error (an enum member or nothing), never a silent fallback.
+    """
+
+    UNCONFIGURED = "unconfigured"
+    TESSERACT = "tesseract"
+
+
 class ConfigurationError(RuntimeError):
     """Raised when the environment does not describe a runnable application.
 
@@ -81,6 +95,13 @@ class Settings(BaseSettings):
 
     host: str = "127.0.0.1"
     port: Annotated[int, Field(ge=1, le=65535)] = 8000
+
+    # -- Extraction engine (D-01 / M23) ---------------------------------------
+    # Which engine build_document_extractor constructs. Defaults to the unconfigured
+    # extractor — the production posture until S-6 selects an engine. `tesseract` is a
+    # DEV/EVALUATION opt-in (DOCURA_OCR_ENGINE=tesseract) for local technical testing of the
+    # candidate through the normal pipeline; it does NOT select Tesseract for production.
+    ocr_engine: OcrEngine = OcrEngine.UNCONFIGURED
 
     # -- Logging --------------------------------------------------------------
     log_level: LogLevel = LogLevel.INFO
