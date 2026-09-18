@@ -182,10 +182,11 @@ def test_malformed_engine_output_is_rejected_not_silently_emptied() -> None:
         )
 
 
-def test_pdf_is_unsupported_by_this_candidate() -> None:
+def test_an_unsupported_content_type_is_rejected() -> None:
+    # PDF is supported as of M21; a genuinely unsupported type still fails honestly.
     with pytest.raises(DocumentExtractionError):
         TesseractExtractor(word_reader=_reader([])).extract(
-            io.BytesIO(b"%PDF-1.7"), content_type="application/pdf"
+            io.BytesIO(b"plain text"), content_type="text/plain"
         )
 
 

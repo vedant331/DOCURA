@@ -1,26 +1,33 @@
-"""Tesseract candidate adapter (M20) — technical smoke testing only, NOT production.
+"""Tesseract candidate adapter (M20/M21) — technical candidate path only, NOT production.
 
 Tesseract is candidate #1 in the M14 list (``app.evaluation.engines.CANDIDATE_ENGINES``):
 self-hosted, offline, Apache-2.0, word-level boxes + confidence — the lightest engine
 that satisfies the seam's needs. **This adapter selects nothing.** Production still runs
 the unconfigured extractor; engine selection stays blocked on the S-6 held-out evaluation
-(D-02 / AR-AST-008 / M14). See ``backend/docs/SPRINT_4_M20_OCR_CANDIDATE_ADAPTER.md``.
+(D-02 / AR-AST-008 / M14). See ``SPRINT_4_M20_OCR_CANDIDATE_ADAPTER.md`` and
+``SPRINT_4_M21_PDF_RASTERIZATION.md``.
+
+Input handling:
+
+* **image/png, image/jpeg, image/tiff** → Tesseract directly (one page).
+* **application/pdf** → rasterized locally to one image per page (``pdf_rasterizer``) → Tesseract
+  per page → one ``ExtractedPage`` per PDF page, in order (M21).
 
 Design:
 
-* The only place ``pytesseract``/``Pillow`` are imported is :func:`_read_words_with_tesseract`,
-  and the import is lazy so a missing dependency becomes an honest extraction failure rather
-  than an import-time crash. No engine knowledge leaks anywhere else.
-* :func:`result_from_words` is a PURE mapping (engine word boxes → the seam's
-  ``ExtractionResult``) with no OCR dependency, so the contract is testable without the
-  binary installed.
-* The engine runs locally as a subprocess of Tesseract. It makes no network calls, and no
-  document text is logged.
+* ``pytesseract``/``Pillow`` are imported lazily and only in the reader helpers, so a missing
+  dependency becomes an honest extraction failure rather than an import-time crash. The PDF
+  renderer is isolated in :mod:`ocr_candidates.pdf_rasterizer`. No engine knowledge leaks
+  outside this package.
+* :func:`result_from_words` / :func:`result_from_pages` are PURE mappings (engine word boxes →
+  the seam's ``ExtractionResult``) with no OCR dependency, so the contract is testable without
+  the binary or renderer installed.
+* Everything runs locally. No network calls; no document text or page image is logged.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, BinaryIO, NamedTuple
 
 from app.core.errors import DocumentExtractionError
@@ -30,15 +37,13 @@ from app.services.extraction import (
     TextBlock,
     TextRegion,
 )
+from ocr_candidates.pdf_rasterizer import DEFAULT_SCALE, rasterize_pdf
 
 if TYPE_CHECKING:
     from app.core.config import Settings
 
-# Content types Tesseract can read directly. PDF is deliberately excluded: Tesseract does
-# not rasterize PDFs, so supporting them would mean pulling in poppler/pdf2image — another
-# system dependency and out of scope for a smoke adapter (M20 §4). A PDF is an honest
-# extraction failure here, not a silently empty result.
-_SUPPORTED_CONTENT_TYPES = frozenset({"image/png", "image/jpeg", "image/jpg", "image/tiff"})
+_IMAGE_CONTENT_TYPES = frozenset({"image/png", "image/jpeg", "image/jpg", "image/tiff"})
+_PDF_CONTENT_TYPE = "application/pdf"
 
 _ENGINE_NAME = "tesseract"
 
@@ -62,10 +67,12 @@ class ImageWords(NamedTuple):
     image_height: int
 
 
-# A reader turns a document stream into words + image size. The real one shells out to
-# Tesseract; tests inject a deterministic fake so the adapter is exercisable without the
-# binary. This is a narrow test/rasterizer seam, not a second extraction abstraction.
+# A word reader turns one image stream into words + size; a page reader turns a PDF stream into
+# one ``ImageWords`` per page. The real ones call Tesseract (and the rasterizer); tests inject
+# deterministic fakes so the adapter is exercisable without the binary/renderer. These are narrow
+# test/rasterizer seams, not a second extraction abstraction.
 WordReader = Callable[[BinaryIO, str], ImageWords]
+PageReader = Callable[[BinaryIO], list[ImageWords]]
 
 
 def _fraction(value: int, extent: int) -> float:
@@ -75,17 +82,12 @@ def _fraction(value: int, extent: int) -> float:
     return min(max(value / extent, 0.0), 1.0)
 
 
-def result_from_words(
-    read: ImageWords,
-    *,
-    engine_version: str,
-    page_number: int = 1,
-) -> ExtractionResult:
-    """Map engine word boxes to the seam's ``ExtractionResult`` (pure, no OCR dependency).
+def _page_from_words(read: ImageWords, page_number: int) -> ExtractedPage:
+    """Build one ``ExtractedPage`` from engine word boxes (pure, no OCR dependency).
 
-    Words with empty text or a negative confidence (Tesseract's marker for a non-word
-    region) are dropped. Boxes are converted from pixels to page-relative fractions so no
-    engine's pixel units leak past the boundary (see ``TextRegion``).
+    Words with empty text or a negative confidence (Tesseract's marker for a non-word region)
+    are dropped. Boxes are converted from pixels to page-relative fractions so no engine's pixel
+    units leak past the boundary (see ``TextRegion``).
     """
     blocks: list[TextBlock] = []
     texts: list[str] = []
@@ -108,14 +110,65 @@ def result_from_words(
             TextBlock(text=text, region=region, confidence=min(word.conf / 100.0, 1.0))
         )
         texts.append(text)
+    return ExtractedPage(number=page_number, text=" ".join(texts), blocks=tuple(blocks))
 
-    page = ExtractedPage(number=page_number, text=" ".join(texts), blocks=tuple(blocks))
+
+def result_from_words(
+    read: ImageWords,
+    *,
+    engine_version: str,
+    page_number: int = 1,
+) -> ExtractionResult:
+    """Single-page ``ExtractionResult`` (image input). Pure, no OCR dependency."""
+    page = _page_from_words(read, page_number)
     return ExtractionResult(
         pages=(page,),
         engine=_ENGINE_NAME,
         engine_version=engine_version,
-        metadata={"word_count": str(len(blocks))},
+        metadata={"word_count": str(len(page.blocks)), "page_count": "1"},
     )
+
+
+def result_from_pages(
+    reads: Sequence[ImageWords],
+    *,
+    engine_version: str,
+) -> ExtractionResult:
+    """Multi-page ``ExtractionResult`` (PDF input): one ``ExtractedPage`` per page, in order."""
+    pages = tuple(_page_from_words(read, i) for i, read in enumerate(reads, start=1))
+    word_count = sum(len(page.blocks) for page in pages)
+    return ExtractionResult(
+        pages=pages,
+        engine=_ENGINE_NAME,
+        engine_version=engine_version,
+        metadata={"word_count": str(word_count), "page_count": str(len(pages))},
+    )
+
+
+def _run_tesseract_on_image(image: object, *, cmd: str | None, languages: str) -> ImageWords:
+    """Run Tesseract on an already-open PIL image. The only place ``pytesseract`` is imported."""
+    try:
+        import pytesseract
+    except ImportError as exc:
+        raise DocumentExtractionError(
+            detail="The Tesseract candidate adapter is not installed.",
+            remediation="Install 'pytesseract' and the Tesseract binary to run this candidate. "
+            "Your file is unchanged.",
+        ) from exc
+
+    if cmd:
+        pytesseract.pytesseract.tesseract_cmd = cmd
+
+    try:
+        width, height = image.size  # type: ignore[attr-defined]
+        data = pytesseract.image_to_data(
+            image, lang=languages, output_type=pytesseract.Output.DICT
+        )
+    except Exception as exc:  # pytesseract raises many engine-specific errors; treat as one
+        # No document content or engine internals are put in the message (NFR-ERR-004).
+        raise DocumentExtractionError from exc
+
+    return ImageWords(words=_words_from_tsv_dict(data), image_width=width, image_height=height)
 
 
 def _read_words_with_tesseract(
@@ -125,43 +178,47 @@ def _read_words_with_tesseract(
     cmd: str | None,
     languages: str,
 ) -> ImageWords:
-    """Run Tesseract locally on one image. The ONLY place pytesseract/Pillow is imported.
-
-    Any missing dependency, unreadable image, or engine error is converted to
-    :class:`DocumentExtractionError` — the seam's honest-failure contract (FR-OCR-009,
-    BR-016). It never returns an empty-but-successful result.
-    """
+    """Open one image and OCR it. Honest failure on a missing dep or an unreadable image."""
     try:
-        import pytesseract
         from PIL import Image, UnidentifiedImageError
-    except ImportError as exc:  # dependency not installed — honest failure
+    except ImportError as exc:
         raise DocumentExtractionError(
             detail="The Tesseract candidate adapter is not installed.",
-            remediation="Install 'pytesseract' and 'Pillow' and the Tesseract binary to "
-            "run this candidate. Your file is unchanged.",
+            remediation="Install 'Pillow' and 'pytesseract' to run this candidate. Your file "
+            "is unchanged.",
         ) from exc
-
-    if cmd:
-        pytesseract.pytesseract.tesseract_cmd = cmd
 
     try:
         image = Image.open(source)
         image.load()
-        width, height = image.size
-        data = pytesseract.image_to_data(
-            image, lang=languages, output_type=pytesseract.Output.DICT
-        )
     except UnidentifiedImageError as exc:
         raise DocumentExtractionError(
             detail="Tesseract could not read this file as an image.",
             remediation="Upload a valid PNG or JPEG. Your file is unchanged.",
         ) from exc
-    except Exception as exc:  # pytesseract raises many engine-specific errors; treat as one
-        # No document content or engine internals are put in the message (NFR-ERR-004).
-        raise DocumentExtractionError from exc
 
-    words = _words_from_tsv_dict(data)
-    return ImageWords(words=words, image_width=width, image_height=height)
+    try:
+        return _run_tesseract_on_image(image, cmd=cmd, languages=languages)
+    finally:
+        image.close()
+
+
+def _read_pages_with_tesseract(
+    source: BinaryIO,
+    *,
+    cmd: str | None,
+    languages: str,
+    scale: float,
+) -> list[ImageWords]:
+    """Rasterize a PDF locally, then OCR each page. Page images are closed deterministically."""
+    images = rasterize_pdf(source, scale=scale)
+    try:
+        return [
+            _run_tesseract_on_image(image, cmd=cmd, languages=languages) for image in images
+        ]
+    finally:
+        for image in images:
+            image.close()
 
 
 def _words_from_tsv_dict(data: dict[str, list[object]]) -> list[Word]:
@@ -210,17 +267,22 @@ class TesseractExtractor:
         *,
         tesseract_cmd: str | None = None,
         languages: str = "eng",
+        pdf_scale: float = DEFAULT_SCALE,
         word_reader: WordReader | None = None,
+        page_reader: PageReader | None = None,
     ) -> None:
-        # ``word_reader`` overrides the real Tesseract call; the harness/tests inject a
-        # deterministic reader so the adapter runs without the binary installed.
+        # ``word_reader`` / ``page_reader`` override the real Tesseract (and rasterizer) calls;
+        # the harness/tests inject deterministic readers so the adapter runs without the
+        # binary/renderer installed. An injected reader also marks the adapter "available".
         self._cmd = tesseract_cmd
         self._languages = languages
-        self._reader = word_reader
+        self._pdf_scale = pdf_scale
+        self._word_reader = word_reader
+        self._page_reader = page_reader
 
     @property
     def version(self) -> str:
-        if self._reader is not None:
+        if self._word_reader is not None or self._page_reader is not None:
             return "stub"
         try:
             import pytesseract
@@ -230,7 +292,7 @@ class TesseractExtractor:
             return "unknown"
 
     def is_available(self) -> bool:
-        if self._reader is not None:
+        if self._word_reader is not None or self._page_reader is not None:
             return True
         try:
             import pytesseract
@@ -241,19 +303,27 @@ class TesseractExtractor:
         return True
 
     def extract(self, source: BinaryIO, *, content_type: str) -> ExtractionResult:
-        if content_type not in _SUPPORTED_CONTENT_TYPES:
-            raise DocumentExtractionError(
-                detail="The Tesseract candidate adapter reads images only.",
-                remediation="Provide a PNG or JPEG image. PDF is not supported by this "
-                "candidate. Your file is unchanged.",
+        if content_type in _IMAGE_CONTENT_TYPES:
+            read_image = self._word_reader or self._default_image_reader
+            return result_from_words(
+                read_image(source, content_type), engine_version=self.version
             )
-        reader = self._reader or self._default_reader
-        read = reader(source, content_type)
-        return result_from_words(read, engine_version=self.version)
+        if content_type == _PDF_CONTENT_TYPE:
+            read_pages = self._page_reader or self._default_pdf_reader
+            return result_from_pages(read_pages(source), engine_version=self.version)
+        raise DocumentExtractionError(
+            detail="The Tesseract candidate adapter accepts images and PDFs only.",
+            remediation="Provide a PNG, JPEG, TIFF, or PDF. Your file is unchanged.",
+        )
 
-    def _default_reader(self, source: BinaryIO, content_type: str) -> ImageWords:
+    def _default_image_reader(self, source: BinaryIO, content_type: str) -> ImageWords:
         return _read_words_with_tesseract(
             source, content_type, cmd=self._cmd, languages=self._languages
+        )
+
+    def _default_pdf_reader(self, source: BinaryIO) -> list[ImageWords]:
+        return _read_pages_with_tesseract(
+            source, cmd=self._cmd, languages=self._languages, scale=self._pdf_scale
         )
 
 

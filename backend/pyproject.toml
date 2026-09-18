@@ -93,11 +93,11 @@ module = ["tests.*"]
 disallow_untyped_defs = false
 check_untyped_defs = true
 
-# The M20 Tesseract candidate adapter (dev/eval only) imports these lazily; they ship no
-# type stubs and are not project dependencies. Not declaring them here is what keeps the
-# no-OCR-dependency guard (tests/test_extraction.py) honest.
+# The M20/M21 candidate adapter (dev/eval only) imports these lazily; they ship no type stubs
+# and are not project dependencies. Not declaring them here is what keeps the no-OCR-dependency
+# guard (tests/test_extraction.py) honest. pypdfium2 is the M21 PDF rasterizer (same posture).
 [[tool.mypy.overrides]]
-module = ["pytesseract", "pytesseract.*", "PIL", "PIL.*"]
+module = ["pytesseract", "pytesseract.*", "PIL", "PIL.*", "pypdfium2", "pypdfium2.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
