@@ -168,7 +168,11 @@ def _run_tesseract_on_image(image: object, *, cmd: str | None, languages: str) -
         # No document content or engine internals are put in the message (NFR-ERR-004).
         raise DocumentExtractionError from exc
 
-    return ImageWords(words=_words_from_tsv_dict(data), image_width=width, image_height=height)
+    # Blocks are line-level (one "Word" per Tesseract line), not per-word: a value like a
+    # full name or a table-row date lives on one line, so a line block gives it a single
+    # region and a single provenance handle — which is what a downstream field extractor and
+    # the AttributeObservation model (one source block per value) need.
+    return ImageWords(words=_lines_from_tsv_dict(data), image_width=width, image_height=height)
 
 
 def _read_words_with_tesseract(
@@ -219,6 +223,58 @@ def _read_pages_with_tesseract(
     finally:
         for image in images:
             image.close()
+
+
+def _lines_from_tsv_dict(data: dict[str, list[object]]) -> list[Word]:
+    """Aggregate pytesseract word rows into one :class:`Word` per line (text unit = a line).
+
+    Words are grouped by Tesseract's (block, paragraph, line) numbering, in row order; each
+    line's text is the space-joined words, its box is the union of the word boxes, and its
+    confidence is the mean of the words' confidences (a measured OCR value — never invented).
+    Falls back to per-word blocks if the grouping columns are absent.
+    """
+    group_keys = ("block_num", "par_num", "line_num")
+    if not all(key in data for key in group_keys):
+        return _words_from_tsv_dict(data)
+
+    words = _words_from_tsv_dict(data)
+    rows = len(data["text"])
+    lines: dict[tuple[int, int, int], list[Word]] = {}
+    order: list[tuple[int, int, int]] = []
+    for i in range(rows):
+        word = words[i]
+        if not word.text.strip() or word.conf < 0:
+            continue  # skip non-words / empty cells, as the per-word mapping does
+        try:
+            key = (
+                int(float(str(data["block_num"][i]))),
+                int(float(str(data["par_num"][i]))),
+                int(float(str(data["line_num"][i]))),
+            )
+        except (TypeError, ValueError) as exc:
+            raise DocumentExtractionError(
+                detail="Tesseract returned a malformed row.",
+                remediation="This is an engine error; your file is unchanged. Try again.",
+            ) from exc
+        if key not in lines:
+            lines[key] = []
+            order.append(key)
+        lines[key].append(word)
+
+    result: list[Word] = []
+    for key in order:
+        members = lines[key]
+        text = " ".join(w.text.strip() for w in members)
+        left = min(w.left for w in members)
+        top = min(w.top for w in members)
+        right = max(w.left + w.width for w in members)
+        bottom = max(w.top + w.height for w in members)
+        mean_conf = sum(w.conf for w in members) / len(members)
+        result.append(
+            Word(text=text, conf=mean_conf, left=left, top=top,
+                 width=right - left, height=bottom - top)
+        )
+    return result
 
 
 def _words_from_tsv_dict(data: dict[str, list[object]]) -> list[Word]:

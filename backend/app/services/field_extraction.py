@@ -30,6 +30,7 @@ the draft evidence).
 from __future__ import annotations
 
 import re
+from datetime import date
 from functools import lru_cache
 from pathlib import Path
 from typing import Protocol, runtime_checkable
@@ -52,19 +53,71 @@ _VOCAB_PATH = (
     Path(__file__).resolve().parents[2]  # app/services/ -> backend/
     / "config"
     / "vocabulary"
-    / "canonical_attributes.v0.1-draft.toml"
+    / "canonical_attributes.v0.2-draft.toml"
 )
 
-# The one draft attribute this slice recognises. Referenced by identifier only; the
-# extractor emits it solely when the versioned vocabulary still defines it (below).
+# The two controlled attributes this slice recognises. Referenced by identifier only; each
+# extractor emits its attribute solely when the versioned vocabulary still defines it (below).
 _PERSON_FULL_NAME = "person.full_name"
+_PERSON_DATE_OF_BIRTH = "person.date_of_birth"
 
-# A single block of the form "<name label><sep><value>", e.g. "Name: Priya Sharma" or
-# "Full Name - Priya Sharma". Case-insensitive; the value is whatever follows the
-# separator. This is the whole heuristic — see FullNameFieldExtractor for its limits.
+# A single block of the form "<name label><sep?><value>", e.g. "Name: Priya Sharma",
+# "Full Name - Priya Sharma", or "Full Name Vedant Santosh Kadam" (a table row where the
+# label and value sit on one OCR line, separated only by whitespace). The separator is
+# optional; the value is whatever follows it. Case-insensitive. See FullNameFieldExtractor.
 _FULL_NAME_LINE = re.compile(
-    r"^\s*(?:full\s+name|name)\s*[:\-]\s*(?P<value>.+?)\s*$", re.IGNORECASE
+    r"^\s*(?:full\s+name|name)\s*[:\-]?\s+(?P<value>\S.*?)\s*$", re.IGNORECASE
 )
+
+# A single block of the form "date of birth<sep?><value>", e.g. "Date of Birth: 24 March
+# 2007" or the table-row form "Date of Birth 24 March 2007". See DateOfBirthFieldExtractor.
+_DOB_LINE = re.compile(
+    r"^\s*date\s+of\s+birth\s*[:\-]?\s+(?P<value>\S.*?)\s*$", re.IGNORECASE
+)
+
+# English month names, lower-cased. Deliberately NOT multilingual: N-DATE excludes ambiguous
+# parsing (vocabulary §N-DATE), and the only date evidence we have is English "24 March 2007".
+_MONTHS = {
+    name.lower(): index
+    for index, name in enumerate(
+        (
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December",
+        ),
+        start=1,
+    )
+}
+
+# The only two date surface forms justified by the current controlled evidence: ISO
+# "YYYY-MM-DD" (already canonical) and "D[D] <MonthName> YYYY" (the test document's form).
+_DOB_ISO = re.compile(r"^(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})$")
+_DOB_DAY_MONTH_YEAR = re.compile(r"^(?P<d>\d{1,2})\s+(?P<month>[A-Za-z]+)\s+(?P<y>\d{4})$")
+
+
+def _normalise_date_of_birth(raw: str) -> str | None:
+    """Normalise a recognised date to canonical ISO ``YYYY-MM-DD`` (N-DATE), or ``None``.
+
+    Only the two surface forms above are accepted; anything else — or a value that does not
+    denote a real calendar date (e.g. "31 February 2007") — returns ``None`` so no observation
+    is produced. Nothing is guessed: no locale-ambiguous DD/MM inference, no two-digit-year
+    completion (those are excluded by the vocabulary's N-DATE rule).
+    """
+    value = " ".join(raw.split())
+    iso = _DOB_ISO.match(value)
+    dmy = _DOB_DAY_MONTH_YEAR.match(value)
+    try:
+        if iso is not None:
+            parsed = date(int(iso["y"]), int(iso["m"]), int(iso["d"]))
+        elif dmy is not None:
+            month = _MONTHS.get(dmy["month"].lower())
+            if month is None:
+                return None
+            parsed = date(int(dmy["y"]), month, int(dmy["d"]))
+        else:
+            return None
+    except ValueError:
+        return None  # a well-formed shape that is not a real date — do not guess
+    return parsed.isoformat()
 
 
 @lru_cache(maxsize=1)
@@ -147,14 +200,81 @@ class FullNameFieldExtractor:
         return candidates
 
 
+class DateOfBirthFieldExtractor:
+    """Deterministic controlled extractor: ``person.date_of_birth`` from a labelled block.
+
+    Mirrors :class:`FullNameFieldExtractor`'s discipline: it recognises **only**
+    ``person.date_of_birth``, and only from a single block whose text is
+    ``date of birth <sep?> <value>``. The value is normalised to canonical ISO
+    (``YYYY-MM-DD``, N-DATE) by :func:`_normalise_date_of_birth`; a value in an unsupported
+    surface form or one that is not a real calendar date yields **nothing** — it never guesses
+    (M22 §5). It emits nothing when the vocabulary no longer defines the attribute.
+
+    Provenance is the exact matched block; confidence is that block's OCR confidence unchanged
+    (or ``None``). The stored value is the canonical ISO form so agreeing dates fold together
+    and disagreeing ones surface as a conflict through the existing record logic.
+    """
+
+    name = "deterministic-date-of-birth"
+    version = "0.2-draft"
+
+    def extract_fields(self, run: ExtractionRun) -> list[CandidateObservation]:
+        if _PERSON_DATE_OF_BIRTH not in _canonical_identifiers():
+            return []
+        candidates: list[CandidateObservation] = []
+        for page in run.pages:
+            for block in page.blocks:
+                match = _DOB_LINE.match(block.text)
+                if match is None:
+                    continue
+                normalised = _normalise_date_of_birth(match.group("value"))
+                if normalised is None:
+                    continue  # unsupported/invalid date — no observation, no guess
+                candidates.append(
+                    CandidateObservation(
+                        canonical_identifier=_PERSON_DATE_OF_BIRTH,
+                        value=normalised,
+                        source_block=block,
+                        confidence=block.confidence,  # attributable, or None; never invented
+                    )
+                )
+        return candidates
+
+
+class ControlledFieldExtractor:
+    """The controlled field extractor: the currently approved attributes, and only those.
+
+    Composes the two single-attribute extractors (``person.full_name`` and
+    ``person.date_of_birth``). It adds no new canonical attribute and folds no candidates
+    together — each sub-extractor contributes its candidates independently, and ambiguity /
+    conflict is left to the existing current-record derivation (G-20).
+    """
+
+    name = "controlled-fields"
+    version = "0.2-draft"
+
+    def __init__(self) -> None:
+        self._extractors: tuple[FieldExtractor, ...] = (
+            FullNameFieldExtractor(),
+            DateOfBirthFieldExtractor(),
+        )
+
+    def extract_fields(self, run: ExtractionRun) -> list[CandidateObservation]:
+        candidates: list[CandidateObservation] = []
+        for extractor in self._extractors:
+            candidates.extend(extractor.extract_fields(run))
+        return candidates
+
+
 def build_field_extractor() -> FieldExtractor:
     """Construct the configured field extractor — the plug point, mirroring D-01.
 
-    Returns the deterministic ``person.full_name`` slice. It is engine-neutral (it maps
+    Returns the controlled extractor for the currently approved attributes
+    (``person.full_name`` and ``person.date_of_birth``). It is engine-neutral (it maps
     already-extracted text, not pixels), so it is usable independently of which OCR engine
     D-01 eventually selects. A later, evaluated, or type-aware extractor replaces it here.
     """
-    return FullNameFieldExtractor()
+    return ControlledFieldExtractor()
 
 
 async def apply_field_extraction(
