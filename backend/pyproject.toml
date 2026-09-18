@@ -79,6 +79,9 @@ quote-style = "double"
 
 [tool.mypy]
 python_version = "3.12"
+# "." lets mypy resolve the out-of-app ``ocr_candidates`` package that app.evaluation.engines
+# imports lazily (M20 candidate adapter); it is not under ``files`` because it is dev/eval-only.
+mypy_path = "."
 files = ["app", "tests"]
 strict = true
 warn_unreachable = true
@@ -90,8 +93,18 @@ module = ["tests.*"]
 disallow_untyped_defs = false
 check_untyped_defs = true
 
+# The M20 Tesseract candidate adapter (dev/eval only) imports these lazily; they ship no
+# type stubs and are not project dependencies. Not declaring them here is what keeps the
+# no-OCR-dependency guard (tests/test_extraction.py) honest.
+[[tool.mypy.overrides]]
+module = ["pytesseract", "pytesseract.*", "PIL", "PIL.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Put the backend root on sys.path so the out-of-app ``ocr_candidates`` package (M20) is
+# importable in tests; ``app`` continues to import via its editable install.
+pythonpath = ["."]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 addopts = "-q --strict-markers"

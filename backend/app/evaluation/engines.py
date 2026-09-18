@@ -30,13 +30,29 @@ def build_engine(name: str, settings: Settings) -> DocumentExtractor:
     """Return the extractor adapter for a candidate name.
 
     ``unconfigured`` comes from the production plug point (currently the always-failing
-    unconfigured extractor). Every real candidate raises :class:`EngineNotInstalledError` — its
-    adapter (a ``DocumentExtractor`` implementation) is added beside the plug point when, and
-    only when, S-6 evaluation and governance permit selecting it. No engine is chosen or
-    installed in this milestone.
+    unconfigured extractor). ``tesseract`` has an adapter for TECHNICAL SMOKE TESTING (M20),
+    returned only when its dependency is actually installed; otherwise, like every other
+    candidate, it raises :class:`EngineNotInstalledError`. Building a candidate here is not
+    engine selection: production still uses the unconfigured extractor and selection stays
+    blocked on S-6 evaluation and governance (D-02 / AR-AST-008).
+
+    The adapter lives OUTSIDE the ``app`` package (``ocr_candidates``) and is imported lazily,
+    so no OCR-library knowledge enters the application's import surface (the invariant in
+    ``app.services.extraction``).
     """
     if name == "unconfigured":
         return build_document_extractor(settings)
+    if name == "tesseract":
+        from ocr_candidates.tesseract_adapter import build_tesseract_extractor
+
+        extractor = build_tesseract_extractor(settings)
+        if not extractor.is_available():
+            raise EngineNotInstalledError(
+                "candidate engine 'tesseract' adapter is present but its dependency "
+                "(pytesseract + the Tesseract binary) is not installed; install it to run "
+                "the candidate for smoke testing"
+            )
+        return extractor
     if name in CANDIDATE_ENGINES:
         raise EngineNotInstalledError(
             f"candidate engine {name!r} is not installed; add a DocumentExtractor adapter for it "
