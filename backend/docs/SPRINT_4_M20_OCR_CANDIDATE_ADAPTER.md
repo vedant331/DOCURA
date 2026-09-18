@@ -7,7 +7,7 @@
 | Production engine selected | **No.** Selection remains blocked on S-6 (D-02 / AR-AST-008 / M14). |
 | Production extractor | **Unchanged — `UnconfiguredExtractor`.** `build_document_extractor` still returns it. |
 | Code changed | `ocr_candidates/` (new, outside `app`), `app/evaluation/engines.py` (lazy candidate wiring), `pyproject.toml` (pytest `pythonpath`, mypy config), tests + this doc |
-| Verification | ruff clean · mypy clean (78 files) · **pytest 490 passed / 1 skipped** with PostgreSQL · single Alembic head `d4e5f6a7b8c9` |
+| Verification | ruff clean · mypy clean (78 files) · **pytest 494 passed / 0 skipped** with PostgreSQL (Tesseract now installed) · single Alembic head `d4e5f6a7b8c9` |
 | Not committed | Per standing rule — the user commits. |
 
 > **Candidate used for technical smoke testing only; production selection remains blocked on S-6.**
@@ -96,6 +96,19 @@ settings)`:
 There is no environment switch that activates OCR in production. Installing `pytesseract` +
 Tesseract only affects the evaluation/dev builder and the smoke tests.
 
+### Optional-dependency decision (M20 update)
+
+`pytesseract` + `Pillow` are **not** declared in `pyproject.toml` — not even as an optional
+extra. This is deliberate, not an oversight: the guard `test_no_ocr_engine_is_declared_as_a_dependency`
+scans **both** `[project.dependencies]` and **every** `[project.optional-dependencies]` group and
+requires them disjoint from the OCR-provider set (which includes `pytesseract`). Declaring the
+candidate's deps anywhere in the manifest would break that guard, which exists precisely so no
+engine can quietly become part of the build. Candidate OCR dependencies are therefore installed
+**out-of-band** into the dev/eval `.venv` (`pip install pytesseract Pillow` + the Tesseract
+binary) when an operator wants to run the candidate; the adapter imports them lazily and fails
+honestly when they are absent. Reproducibility is documented here rather than pinned in the
+manifest. Production defaults are unchanged.
+
 ## 6. Input handling
 
 Tesseract reads images. The adapter accepts `image/png` and `image/jpeg` (plus `tiff`), the
@@ -146,18 +159,27 @@ adapter through `run_evaluation` over a **synthetic** one-image corpus with an i
 It checks wiring and that results stay PII-free — it is **not** an OCR score and is not S-6
 evidence.
 
-## 10. Tests (`tests/test_ocr_candidate_adapter.py`, 15 tests)
+## 10. Tests (`tests/test_ocr_candidate_adapter.py`, 18 tests)
 
 Construction & protocol conformance · pure-mapper contract (fractions, confidence scaling,
 region, dropped non-words) · extract through the seam · single-image-is-one-page · realistic TSV
-parsing · missing dependency · engine crash · malformed output · unsupported PDF · **no network
-calls** · `build_engine("tesseract")` refuses when uninstalled · **production builder still
-returns the unconfigured extractor** · M19 runner drives the adapter (PII-free) · **real
-Tesseract end-to-end** (runs when installed; **skipped** in this environment — no binary).
+parsing · missing dependency (extract) · engine crash · malformed output · unsupported PDF ·
+**no network calls** · **production builder still returns the unconfigured extractor** · M19
+runner drives the adapter (PII-free) · **real Tesseract end-to-end** (runs when installed).
 
-Verification (this environment: Python 3.14, no Tesseract binary):
-`ruff` clean · `mypy` clean · `pytest` **490 passed, 1 skipped** with PostgreSQL · single Alembic
-head. The one skip is the real-engine test, honestly gated on `is_available()`.
+Availability is tested **environment-aware and both-branch-deterministic** (M20 update, once
+Tesseract was installed):
+
+- `is_available()` — injected reader → always True; bare adapter → matches the real environment
+  (`_real_tesseract_available()`); forced-missing dependency (monkeypatched `sys.modules`) → False.
+- `build_engine("tesseract")` — returns a `TesseractExtractor` when the dependency is present,
+  raises `EngineNotInstalledError` when the environment lacks it, and (monkeypatched) raises
+  deterministically when the dependency is missing. No test uninstalls Tesseract.
+
+Verification (environment: Python 3.14, **Tesseract 5.5.3 + pytesseract 0.3.13 + Pillow now
+installed**): `ruff` clean · `mypy` clean · `pytest` **494 passed, 0 skipped** with PostgreSQL ·
+single Alembic head `d4e5f6a7b8c9`. The real-engine test now runs (reads a rendered image) rather
+than skipping.
 
 ## 11. Production safety check
 

@@ -114,8 +114,10 @@ def test_build_engine_contract(tmp_path: Path) -> None:
     engine = build_engine("unconfigured", settings)
     assert engine.name == "unconfigured"
     assert engine.is_available() is False
+    # A candidate name that has no adapter raises regardless of environment. ('tesseract' now
+    # has an adapter and its install state is asserted in test_ocr_candidate_adapter.py.)
     with pytest.raises(EngineNotInstalledError):
-        build_engine("tesseract", settings)  # a candidate name, deliberately not installed
+        build_engine("paddleocr", settings)
     with pytest.raises(EngineNotInstalledError):
         build_engine("something-else", settings)
 

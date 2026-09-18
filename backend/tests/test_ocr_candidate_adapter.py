@@ -41,6 +41,21 @@ from app.services.extraction import DocumentExtractor, build_document_extractor
 PNG = "image/png"
 
 
+def _real_tesseract_available() -> bool:
+    """Ground-truth probe: is pytesseract importable AND the Tesseract binary runnable?
+
+    Independent of the adapter so the availability tests are environment-aware rather than
+    hard-coding whether Tesseract happens to be installed on this machine.
+    """
+    try:
+        import pytesseract
+
+        pytesseract.get_tesseract_version()
+    except Exception:
+        return False
+    return True
+
+
 def _settings(tmp_path: Path) -> Settings:
     return Settings(
         environment=Environment.TEST,
@@ -61,11 +76,21 @@ def test_the_adapter_satisfies_the_document_extractor_protocol() -> None:
     assert isinstance(TesseractExtractor(word_reader=_reader([])), DocumentExtractor)
 
 
-def test_an_injected_reader_reports_available_a_bare_adapter_does_not(tmp_path: Path) -> None:
+def test_injected_reader_is_always_available() -> None:
+    # An injected reader stands in for the engine, so the adapter is usable with no binary.
     assert TesseractExtractor(word_reader=_reader([])).is_available() is True
-    # No binary is installed in this environment, so the real adapter is unavailable.
-    bare = build_engine  # referenced to keep the import meaningful
-    assert bare is not None
+
+
+def test_bare_adapter_availability_matches_the_environment() -> None:
+    # Environment-aware: True where the real Tesseract dependency is installed, False otherwise.
+    assert TesseractExtractor().is_available() is _real_tesseract_available()
+
+
+def test_is_available_is_false_when_the_dependency_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Deterministic unavailable branch without uninstalling Tesseract: force the import to fail.
+    monkeypatch.setitem(sys.modules, "pytesseract", None)
     assert TesseractExtractor().is_available() is False
 
 
@@ -177,9 +202,21 @@ def test_the_adapter_makes_no_network_calls(monkeypatch: pytest.MonkeyPatch) -> 
 
 
 # ------------------------------------------------------------- engine-selection boundary
-def test_build_engine_tesseract_is_unavailable_without_the_binary(tmp_path: Path) -> None:
-    # The adapter exists, but its dependency is not installed here, so the builder refuses —
-    # it never silently degrades to a working-looking engine.
+def test_build_engine_tesseract_matches_the_environment(tmp_path: Path) -> None:
+    # Environment-aware: with the dependency installed the builder returns the adapter; without
+    # it, the builder refuses rather than silently degrading to a working-looking engine.
+    if _real_tesseract_available():
+        assert isinstance(build_engine("tesseract", _settings(tmp_path)), TesseractExtractor)
+    else:
+        with pytest.raises(EngineNotInstalledError):
+            build_engine("tesseract", _settings(tmp_path))
+
+
+def test_build_engine_tesseract_raises_when_the_dependency_is_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Deterministic unavailable branch without uninstalling Tesseract.
+    monkeypatch.setitem(sys.modules, "pytesseract", None)
     with pytest.raises(EngineNotInstalledError):
         build_engine("tesseract", _settings(tmp_path))
 
