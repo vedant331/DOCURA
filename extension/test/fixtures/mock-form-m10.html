@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DOCURA — Controlled Mock Form (M10, information-bearing)</title>
+    <style>
+      body { font: 15px/1.5 system-ui, -apple-system, Segoe UI, sans-serif; max-width: 760px; margin: 2.5rem auto; padding: 0 1rem 4rem; color: #111; }
+      h1 { font-size: 1.3rem; } h2 { font-size: 1rem; margin-top: 2rem; border-bottom: 1px solid #ddd; padding-bottom: .3rem; }
+      .note { background: #fffbe6; border: 1px solid #f0d98a; padding: .75rem 1rem; border-radius: 6px; font-size: .85rem; }
+      label { display: block; margin: .9rem 0; } .req::after { content: " *"; color: #c00; }
+      input, select, textarea { display: block; margin-top: .25rem; padding: .4rem; min-width: 280px; }
+      [data-docura-filled="true"] { outline: 2px solid #0b6b3a; background: #eafaf0; }
+      fieldset { margin: .9rem 0; } .slot { color: #888; font-size: .75rem; font-family: ui-monospace, monospace; }
+      button { margin-top: 1.5rem; padding: .6rem 1.4rem; font-size: 1rem; }
+    </style>
+  </head>
+  <body>
+    <h1>Controlled Mock Application Form — M10</h1>
+
+    <!--
+      DOCURA §10 / ASM-002 controlled mock form — M10 information-bearing variant.
+      Built on the M9 L-STRUCT fixture (all seven FR-FLD-007 field types + behavioural slots
+      S1–S10). It adds ONLY the information fields whose mapping is explicitly APPROVED:
+
+        #full_name            → person.full_name   (PD-B approved attribute; routine FORM field → auto-fill)
+        #sensitive_full_name  → person.full_name   (controlled SENSITIVE form field → per-disclosure approval; M10-D3)
+
+      Field identifiers here EXACTLY match extension/src/mapping.js (exact match, no fuzzy
+      label guessing — BR-009). Every other information field is deliberately omitted: no other
+      canonical attribute is approved (G-12/G-13), so adding more would fabricate C-a's owed
+      evidence. Unmapped/declaration/ambiguous fields are kept to prove DOCURA leaves them alone.
+    -->
+    <p class="note">
+      Information-bearing controlled fixture. Only the two full-name fields have an approved mapping;
+      DOCURA fills the routine one from your record, asks approval for the sensitive one, and leaves
+      every other field (unknown, declaration, ambiguous, upload) untouched. Green outline = DOCURA-filled.
+    </p>
+
+    <form id="mca-mock" name="mca-mock">
+      <h2>Approved mapped fields</h2>
+      <label class="req" for="full_name">Full name <span class="slot">(→ person.full_name · routine · auto-fill)</span>
+        <input type="text" id="full_name" name="full_name" required maxlength="120" autocomplete="off" />
+      </label>
+
+      <label for="sensitive_full_name">Full name (sensitive disclosure) <span class="slot">(→ person.full_name · sensitive · approval required · M10-D3)</span>
+        <input type="text" id="sensitive_full_name" name="sensitive_full_name" autocomplete="off" />
+      </label>
+
+      <label for="date_of_birth">Date of birth <span class="slot">(→ person.date_of_birth · consent-gated by G-15 default · approval required · M12-D3)</span>
+        <input type="date" id="date_of_birth" name="date_of_birth" min="1900-01-01" max="2100-12-31" />
+      </label>
+
+      <h2>Seven field types &amp; structural slots (unmapped — must stay untouched)</h2>
+      <label>Unknown text field <span class="slot">(S1 text · no approved mapping → untouched)</span>
+        <input type="text" id="unknown_text" name="unknown_text" maxlength="64" />
+      </label>
+
+      <label>Number field <span class="slot">(S1 number)</span>
+        <input type="number" id="field_number" name="field_number" min="0" max="100" step="1" />
+      </label>
+
+      <label>Date field <span class="slot">(S1 date)</span>
+        <input type="date" id="field_date" name="field_date" min="1900-01-01" max="2100-12-31" />
+      </label>
+
+      <label>Static dropdown <span class="slot">(S1 select · S3)</span>
+        <select id="field_select_static" name="field_select_static">
+          <option value="">— choose —</option>
+          <option value="opt_a">Option A</option>
+          <option value="opt_b">Option B</option>
+        </select>
+      </label>
+
+      <fieldset>
+        <legend>Radio group <span class="slot">(S1 radio · S5)</span></legend>
+        <label><input type="radio" name="field_radio" value="r1" /> Choice 1</label>
+        <label><input type="radio" name="field_radio" value="r2" /> Choice 2</label>
+      </fieldset>
+
+      <label><input type="checkbox" id="field_checkbox_routine" name="field_checkbox_routine" /> Routine checkbox <span class="slot">(S1 checkbox · S6)</span></label>
+
+      <label class="req" for="field_file">File upload <span class="slot">(S1 file · S8 — matching, not filled in M10)</span>
+        <input type="file" id="field_file" name="field_file" required accept="application/pdf,image/png,image/jpeg" data-max-size="5MB" />
+      </label>
+
+      <h2>S7 · Ambiguity slot (same field requested twice — must not auto-fill)</h2>
+      <label>Ambiguous field, instance 1 <span class="slot">(S7)</span>
+        <input type="text" name="field_ambiguous" id="field_ambiguous_1" />
+      </label>
+      <label>Ambiguous field, instance 2 — same <code>name</code> <span class="slot">(S7)</span>
+        <input type="text" name="field_ambiguous" id="field_ambiguous_2" />
+      </label>
+
+      <h2>S10 · Consequential declaration (must be left untouched)</h2>
+      <label><input type="checkbox" id="field_declaration" name="field_declaration" required />
+        I declare that the information provided is true and complete. <span class="slot">(S10 — DOCURA must never tick this)</span>
+      </label>
+
+      <button type="submit">Submit application</button>
+      <p class="slot">DOCURA never operates this submit control (BR-008). Hand-back returns control to you.</p>
+    </form>
+  </body>
+</html>

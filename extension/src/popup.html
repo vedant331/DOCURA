@@ -32,7 +32,15 @@
     <!-- Active: a form session exists; stop is one click away. -->
     <section id="active" hidden>
       <p class="who">Active as <strong id="who-active"></strong>.</p>
-      <p class="hint">The green banner on the page shows DOCURA is active. It is not filling anything yet.</p>
+      <p class="hint">The green banner on the page shows DOCURA is active. Safe, routine fields are filled from your record; sensitive fields wait for your approval below.</p>
+
+      <!-- Sensitive fields awaiting one-time, exact-scope approval (M10 §13). Shown only when
+           the active page has any. Approving fills that one field; it never carries over. -->
+      <div id="approvals" hidden>
+        <p class="label">Approve disclosure — one field at a time</p>
+        <ul id="approvals-list"></ul>
+      </div>
+
       <button id="stop" class="danger">Stop DOCURA</button>
       <p class="session">Session <code id="session-id"></code></p>
     </section>

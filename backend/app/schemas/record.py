@@ -14,6 +14,7 @@ layer (G-14/G-15) can gate disclosure per attribute before any value is returned
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -79,3 +80,42 @@ class AttributeRecordResponse(BaseModel):
 
     attributes: list[AttributeValueResponse]
     count: int
+
+
+class ExportedDocument(BaseModel):
+    """One document in the export — metadata only, never bytes or the storage key.
+
+    The same fields the vault listing shows (FR-DOC-001), so the export is the user's own
+    record of what they have stored, openable and self-describing.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: uuid.UUID
+    original_filename: str
+    content_type: str
+    byte_size: int
+    checksum_sha256: str
+    document_type: str
+    status: str
+    created_at: datetime
+
+
+class RecordExportResponse(BaseModel):
+    """The user's complete record export (FR-ACC-006): their documents and the extracted
+    information, in one openable JSON document.
+
+    It references documents by id and carries no file bytes, no storage key, and no secret
+    (the same privacy rules as every other response here). Deterministically ordered — the
+    attributes and documents come out in the same order the record and vault APIs return.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    docura_export_version: str = "1"
+    exported_at: datetime
+    account_email: str
+    documents: list[ExportedDocument]
+    attributes: list[AttributeValueResponse]
+    document_count: int
+    attribute_count: int

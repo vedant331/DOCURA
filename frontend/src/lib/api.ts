@@ -122,10 +122,11 @@ export function logout(token: string) {
 // These reuse the SAME bearer token as auth (readToken from @/auth/session) so
 // there is one auth system, and the SAME problem+json error handling. Every path
 // below maps to an endpoint that already exists in backend/app/api — no invented
-// endpoints. Where a product capability has no backend yet (assistant, attribute
-// correction, conflict resolution, extension-side readiness/matching/approval
-// detail), there is deliberately NO function here: the UI renders an honest
-// not-connected seam instead of calling a fake endpoint.
+// endpoints. The assistant/chat is now wired to the real /conversations API (below).
+// Where a product capability still has no backend (attribute correction, conflict
+// resolution, search, export, extension-side readiness/matching/approval detail),
+// there is deliberately NO function here: the UI renders an honest not-connected
+// seam instead of calling a fake endpoint.
 // ============================================================================
 
 function authInit(init: RequestInit = {}): RequestInit {
@@ -268,6 +269,50 @@ export function getAttribute(canonicalIdentifier: string) {
   );
 }
 
+// The complete record export (FR-ACC-006): documents + extracted information, as one openable
+// JSON file. Returned as a Blob so the caller can offer it as a download; the original data is
+// never modified. Mirrors downloadDocument's transport handling.
+export async function exportRecord(): Promise<Blob> {
+  let response: Response;
+  try {
+    response = await fetch(`${BASE}/record/export`, authInit());
+  } catch {
+    throw new ApiError("Cannot reach DOCURA. Check your connection and try again.", 0);
+  }
+  if (!response.ok) {
+    throw new ApiError(`Could not export your record (${response.status}).`, response.status);
+  }
+  return response.blob();
+}
+
+// ---- search (backend/app/api/search.py — FR-SRCH) --------------------------
+
+export interface DocumentMatch {
+  id: string;
+  original_filename: string;
+  status: DocumentStatus;
+}
+
+export interface AttributeMatch {
+  canonical_identifier: string;
+  value: string | null;
+  is_ambiguous: boolean;
+  document_id: string | null;
+  page_number: number | null;
+}
+
+export interface SearchResponse {
+  query: string;
+  documents: DocumentMatch[];
+  attributes: AttributeMatch[];
+  document_count: number;
+  attribute_count: number;
+}
+
+export function search(q: string) {
+  return authRequest<SearchResponse>(`/search?q=${encodeURIComponent(q)}`);
+}
+
 // ---- form sessions (backend/app/api/form_sessions.py) ----------------------
 
 export type FormSessionState = "active" | "handed_back" | "stopped" | "expired";
@@ -359,4 +404,109 @@ export function listAuthSessions() {
 
 export function revokeAllAuthSessions() {
   return authRequest<{ revoked: number }>("/auth/sessions/revoke-all", { method: "POST" });
+}
+
+// ---- account deletion (backend/app/api/users.py — DELETE /users/me) ----------
+// FR-ACC-007: irreversible, owner-only, requires the account's own email as explicit
+// confirmation. The backend cascades documents/record/sessions/history and deletes stored
+// originals; the caller signs out afterward since this session's token is invalidated.
+
+export interface AccountDeletionResponse {
+  email: string;
+  documents_removed: number;
+  objects_removed: number;
+}
+
+export function deleteAccount(confirmEmail: string) {
+  return authRequest<AccountDeletionResponse>("/users/me", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ confirm_email: confirmEmail }),
+  });
+}
+
+// ---- chat / conversations (backend/app/api/chat.py) --------------------------
+// The controlled assistant. The backend is the source of truth for intent + responses;
+// the frontend never reproduces intent logic. A message's structure (task, requirement /
+// readiness blocks, actions) lives on `data`, value-free by construction.
+
+export type ConversationRole = "user" | "assistant" | "system";
+export type AssistantMessageType =
+  | "text"
+  | "requirements"
+  | "document_status"
+  | "readiness"
+  | "question"
+  | "approval"
+  | "action"
+  | "error";
+
+export interface ConversationResponse {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ConversationListResponse {
+  conversations: ConversationResponse[];
+  count: number;
+}
+
+export interface MessageResponse {
+  id: string;
+  role: ConversationRole;
+  message_type: AssistantMessageType;
+  content: string;
+  data: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface MessageListResponse {
+  messages: MessageResponse[];
+  count: number;
+}
+
+export interface ChatTurnResponse {
+  user_message: MessageResponse;
+  assistant_message: MessageResponse;
+}
+
+export function createConversation(title?: string) {
+  return authRequest<ConversationResponse>("/conversations", jsonInit({ title: title ?? null }));
+}
+
+export function listConversations() {
+  return authRequest<ConversationListResponse>("/conversations");
+}
+
+export function getConversation(id: string) {
+  return authRequest<ConversationResponse>(`/conversations/${id}`);
+}
+
+export function renameConversation(id: string, title: string) {
+  return authRequest<ConversationResponse>(`/conversations/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+}
+
+export function deleteConversation(id: string) {
+  return authRequest<void>(`/conversations/${id}`, { method: "DELETE" });
+}
+
+// Send a message → runs the backend orchestration and returns BOTH the persisted user
+// message and DOCURA's structured reply. The reply is the source of truth (no local AI).
+export function sendMessage(id: string, content: string) {
+  return authRequest<ChatTurnResponse>(
+    `/conversations/${id}/messages`,
+    jsonInit({ content }),
+  );
+}
+
+export function listMessages(id: string, limit = 100, offset = 0) {
+  return authRequest<MessageListResponse>(
+    `/conversations/${id}/messages?limit=${limit}&offset=${offset}`,
+  );
 }

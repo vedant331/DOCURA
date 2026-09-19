@@ -8,8 +8,15 @@ const config: Config = {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
+      spacing: {
+        // Custom steps used by the adaptive notch navigation component.
+        "8.5": "2.125rem",
+        "17.5": "4.375rem",
+      },
       colors: {
         bg: "hsl(var(--bg))",
+        // `background`/`foreground` aliases so the copied shadcn-style notch component resolves.
+        background: "hsl(var(--bg))",
         surface: "hsl(var(--surface))",
         "surface-2": "hsl(var(--surface-2))",
         border: "hsl(var(--border))",
@@ -28,6 +35,8 @@ const config: Config = {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
         },
+        elevated: "hsl(var(--elevated))",
+        "elevated-2": "hsl(var(--elevated-2))",
       },
       fontFamily: {
         sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
@@ -51,10 +60,19 @@ const config: Config = {
           from: { opacity: "0", transform: "translateY(6px)" },
           to: { opacity: "1", transform: "translateY(0)" },
         },
+        "docura-message-in": {
+          from: { opacity: "0", transform: "translateY(8px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        "docura-typing": {
+          "0%, 60%, 100%": { opacity: "0.25", transform: "translateY(0)" },
+          "30%": { opacity: "1", transform: "translateY(-2px)" },
+        },
       },
       animation: {
         float: "docura-float 20s infinite alternate ease-in-out",
         "fade-in": "docura-fade-in 0.5s cubic-bezier(0.2,1,0.3,1) both",
+        "message-in": "docura-message-in 0.35s cubic-bezier(0.2,1,0.3,1) both",
       },
     },
   },

@@ -46,6 +46,7 @@
     import(chrome.runtime.getURL("src/matching.js")),
     import(chrome.runtime.getURL("src/autofill.js")),
     import(chrome.runtime.getURL("src/mapping.js")),
+    import(chrome.runtime.getURL("src/demo.js")),
   ])
     .then(
       ([
@@ -63,7 +64,24 @@
           approvalDecisionAuditAction,
         },
         { resolveField },
+        {
+          DEMO_MODE,
+          demoResolveField,
+          demoFieldAutomation,
+          isDemoForm,
+          demoClassifyTier,
+          demoClassifyDeclaration,
+        },
       ]) => {
+        // DEMO opt-in: when on, the SAME pipeline uses the dynamic demo seams (label-driven
+        // interpretation over common attributes). Off by default → production is unchanged.
+        const fillSeams = DEMO_MODE
+          ? { resolveField: demoResolveField, fieldAutomation: demoFieldAutomation, isEligibleForm: isDemoForm }
+          : {};
+        const resolveFieldActive = DEMO_MODE ? demoResolveField : resolveField;
+        const reviewSeams = DEMO_MODE
+          ? { classifyTier: demoClassifyTier, classifyDeclaration: demoClassifyDeclaration }
+          : {};
         if (globalThis.__docuraWatcher) return;
         // Session-scoped, in-memory approval ledger (BR-007: never persisted or generalised).
         const approvals = (globalThis.__docuraApprovals = newApprovalLedger());
@@ -96,7 +114,7 @@
         // conflicting, and declaration fields are left untouched.
         const runFill = () => {
           if (!latest) return;
-          const plan = computeFillPlan({ snapshot: latest, record, approvals, context });
+          const plan = computeFillPlan({ snapshot: latest, record, approvals, context, ...fillSeams });
           globalThis.__docuraFillPlan = plan;
           const { filled, failed } = applyFillPlan({ plan, root: document, approvals });
           globalThis.__docuraFills = filled;
@@ -124,9 +142,9 @@
           globalThis.__docuraForms = result;
           // M10: the APPROVED mapping is now injected, and the user's record is supplied, so
           // supported fields resolve to a value. Everything else stays unknown/untouched.
-          globalThis.__docuraReadiness = computeReadiness({ snapshot: result, record, resolveField });
-          globalThis.__docuraRetrieval = computeRetrieval({ snapshot: result, record, resolveField });
-          globalThis.__docuraReview = computeReview({ snapshot: result, record, resolveField, approvals });
+          globalThis.__docuraReadiness = computeReadiness({ snapshot: result, record, resolveField: resolveFieldActive });
+          globalThis.__docuraRetrieval = computeRetrieval({ snapshot: result, record, resolveField: resolveFieldActive });
+          globalThis.__docuraReview = computeReview({ snapshot: result, record, resolveField: resolveFieldActive, approvals, ...reviewSeams });
           // Document matching stays at its frozen default (no approved matcher/threshold).
           globalThis.__docuraMatching = computeMatching({ snapshot: result, approvals });
           runFill();
@@ -155,7 +173,7 @@
         // for this field's available value, then fill just that one field (one-time, BR-005/007).
         const onApprove = (msg) => {
           if (msg?.type !== "approveField" || !latest) return;
-          const plan = computeFillPlan({ snapshot: latest, record, approvals, context });
+          const plan = computeFillPlan({ snapshot: latest, record, approvals, context, ...fillSeams });
           for (const form of plan.forms) {
             for (const f of form.fields) {
               if (f.fieldId === msg.fieldId && f.action === "approval_required") {

@@ -7,6 +7,7 @@ import { useAsync } from "@/hooks/useAsync";
 import { formatDateTime } from "@/lib/format";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ConfirmationDialog } from "@/components/system/ConfirmationDialog";
 import { ErrorState, LoadingState, NotConnected } from "@/components/system/states";
 
@@ -28,6 +29,11 @@ export default function SettingsPage() {
   const navigate = useNavigate();
   const sessions = useAsync(() => api.listAuthSessions());
   const [revoking, setRevoking] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmEmail, setConfirmEmail] = useState("");
+
+  const email = user?.email ?? "";
+  const canDelete = confirmEmail.trim().toLowerCase() === email.toLowerCase() && email.length > 0;
 
   return (
     <>
@@ -105,13 +111,13 @@ export default function SettingsPage() {
           <div className="border-t border-border pt-4">
             <p className="text-sm text-foreground">Delete account</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Permanently deleting your account and all data is a destructive action.
+              Permanently delete your account and all data — every document and anything
+              extracted from it, your record, your sessions, and your form-session history. This
+              cannot be undone.
             </p>
-            <NotConnected
-              className="mt-2"
-              title="Account deletion not yet connected"
-              description="There is no account-deletion endpoint yet. When connected, it will require explicit confirmation and cannot be undone."
-            />
+            <Button variant="destructive" className="mt-2" onClick={() => setDeleting(true)}>
+              Delete account
+            </Button>
           </div>
         </Section>
       </div>
@@ -129,6 +135,44 @@ export default function SettingsPage() {
           navigate("/login", { replace: true });
         }}
       />
+
+      <ConfirmationDialog
+        open={deleting}
+        onOpenChange={(o) => {
+          setDeleting(o);
+          if (!o) setConfirmEmail("");
+        }}
+        title="Delete your account?"
+        description={
+          <>
+            This permanently deletes your account and everything in it — documents, extracted
+            information, your record, sessions, and form-session history. It cannot be undone. Type
+            your email <span className="font-mono text-foreground">{email}</span> to confirm.
+          </>
+        }
+        confirmLabel="Delete account"
+        destructive
+        confirmDisabled={!canDelete}
+        onConfirm={async () => {
+          await api.deleteAccount(confirmEmail.trim());
+          await signOut(); // this session's token is already invalidated server-side
+          navigate("/login", { replace: true });
+        }}
+      >
+        <div className="space-y-1.5">
+          <label htmlFor="confirm-email" className="label-system">
+            Confirm your email
+          </label>
+          <Input
+            id="confirm-email"
+            type="email"
+            autoComplete="off"
+            value={confirmEmail}
+            placeholder={email}
+            onChange={(e) => setConfirmEmail(e.target.value)}
+          />
+        </div>
+      </ConfirmationDialog>
     </>
   );
 }

@@ -87,3 +87,29 @@ test("normalizeLabel: deterministic, meaning-preserving", () => {
   assert.equal(normalizeLabel(null), "");
   assert.equal(normalizeLabel(undefined), "");
 });
+
+// ---- M17: interpretation over semantic metadata + source priority (§4) --------
+
+test("M17: aria-label and aria-labelledby resolve like a visible label", () => {
+  assert.equal(interpretField({ ariaLabel: "Date of Birth" }).canonicalIdentifier, "person.date_of_birth");
+  assert.equal(interpretField({ ariaLabelledBy: "Full Name" }).canonicalIdentifier, "person.full_name");
+});
+
+test("M17 §4: placeholder/title never override an explicit accessible label", () => {
+  // Primary (label) matches → secondary (placeholder/title) is not consulted.
+  assert.equal(interpretField({ label: "Full Name", placeholder: "dob" }).canonicalIdentifier, "person.full_name");
+  assert.equal(interpretField({ ariaLabel: "Full Name", title: "date of birth" }).canonicalIdentifier, "person.full_name");
+});
+
+test("M17 §4: placeholder/title are used only when nothing primary matches", () => {
+  assert.equal(interpretField({ placeholder: "Date of Birth" }).canonicalIdentifier, "person.date_of_birth");
+  assert.equal(interpretField({ title: "Full Name" }).canonicalIdentifier, "person.full_name");
+  // A non-alias placeholder still yields unknown (no fuzzy).
+  assert.equal(interpretField({ placeholder: "Enter your details" }).status, "unknown");
+});
+
+test("M17: label vs id disagreement stays ambiguous (both are primary sources)", () => {
+  const r = interpretField({ label: "Full Name", id: "date_of_birth" });
+  assert.equal(r.status, "ambiguous");
+  assert.deepEqual([...r.candidates].sort(), ["person.date_of_birth", "person.full_name"]);
+});

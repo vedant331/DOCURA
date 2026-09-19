@@ -15,7 +15,9 @@ from the path — a caller has no way to name another account, exactly as in the
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from datetime import UTC, datetime
+
+from fastapi import APIRouter, Response
 
 from app.api.deps import CurrentUser, DbSession
 from app.core.errors import AttributeNotFoundError
@@ -23,6 +25,8 @@ from app.db.models import AttributeObservation
 from app.schemas.record import (
     AttributeRecordResponse,
     AttributeValueResponse,
+    ExportedDocument,
+    RecordExportResponse,
     SourceRegionResponse,
     SupportingObservationResponse,
 )
@@ -31,6 +35,7 @@ from app.services.current_record import (
     build_current_record,
     get_current_value,
 )
+from app.services.document_service import list_documents
 
 router = APIRouter(prefix="/record", tags=["record"])
 
@@ -85,6 +90,47 @@ async def read_record(user: CurrentUser, db: DbSession) -> AttributeRecordRespon
     return AttributeRecordResponse(
         attributes=[_to_response(value) for value in record],
         count=len(record),
+    )
+
+
+@router.get(
+    "/export",
+    response_model=RecordExportResponse,
+    summary="Export the complete record — documents and extracted information (FR-ACC-006)",
+)
+async def export_record(
+    user: CurrentUser, db: DbSession, response: Response
+) -> RecordExportResponse:
+    """The authenticated user's whole record, in one openable JSON file (FR-ACC-006, UC-004).
+
+    Scoped to the session, exactly like the record and vault reads it reuses
+    (:func:`build_current_record`, :func:`list_documents`) — a caller can only export their
+    own account. It references documents by id and carries no file bytes, storage key, or
+    secret. Read-only: exporting changes nothing.
+    """
+    record = await build_current_record(db, user_id=user.id)
+    documents = await list_documents(db, user_id=user.id)
+    # A hint to the browser to save rather than render; the content is plain JSON.
+    response.headers["Content-Disposition"] = 'attachment; filename="docura-record-export.json"'
+    return RecordExportResponse(
+        exported_at=datetime.now(UTC),
+        account_email=user.email,
+        documents=[
+            ExportedDocument(
+                id=d.id,
+                original_filename=d.original_filename,
+                content_type=d.content_type,
+                byte_size=d.byte_size,
+                checksum_sha256=d.checksum_sha256,
+                document_type=d.document_type.value,
+                status=d.status.value,
+                created_at=d.created_at,
+            )
+            for d in documents
+        ],
+        attributes=[_to_response(value) for value in record],
+        document_count=len(documents),
+        attribute_count=len(record),
     )
 
 

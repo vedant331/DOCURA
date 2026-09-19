@@ -20,7 +20,9 @@ export function ConfirmationDialog({
   description,
   confirmLabel = "Confirm",
   destructive = false,
+  confirmDisabled = false,
   onConfirm,
+  children,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -28,7 +30,9 @@ export function ConfirmationDialog({
   description: ReactNode;
   confirmLabel?: string;
   destructive?: boolean;
+  confirmDisabled?: boolean;
   onConfirm: () => Promise<void> | void;
+  children?: ReactNode;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +57,7 @@ export function ConfirmationDialog({
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
+        {children}
         {error ? (
           <p role="alert" className="font-mono text-[11px] text-destructive">
             {error}
@@ -67,6 +72,7 @@ export function ConfirmationDialog({
             onClick={confirm}
             loading={busy}
             loadingLabel="Working"
+            disabled={confirmDisabled}
           >
             {confirmLabel}
           </Button>

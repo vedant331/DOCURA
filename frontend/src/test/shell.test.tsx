@@ -17,6 +17,9 @@ vi.mock("@/lib/api", async (importActual) => {
     listDocuments: vi.fn(),
     getUploadLimits: vi.fn(),
     listFormSessions: vi.fn(),
+    listConversations: vi.fn(),
+    createConversation: vi.fn(),
+    listMessages: vi.fn(),
   };
 });
 
@@ -27,6 +30,9 @@ const mocked = api as unknown as {
   listDocuments: ReturnType<typeof vi.fn>;
   getUploadLimits: ReturnType<typeof vi.fn>;
   listFormSessions: ReturnType<typeof vi.fn>;
+  listConversations: ReturnType<typeof vi.fn>;
+  createConversation: ReturnType<typeof vi.fn>;
+  listMessages: ReturnType<typeof vi.fn>;
 };
 
 // Simulate a signed-in browser: a stored token that /users/me accepts, with the command
@@ -42,6 +48,15 @@ function signedIn() {
     max_documents_per_upload: 5,
   });
   mocked.listFormSessions.mockResolvedValue({ sessions: [], count: 0 });
+  // The command center creates/restores a real conversation on mount.
+  mocked.listConversations.mockResolvedValue({ conversations: [], count: 0 });
+  mocked.createConversation.mockResolvedValue({
+    id: "c1",
+    title: "New chat",
+    created_at: "2026-02-01T10:00:00Z",
+    updated_at: "2026-02-01T10:00:00Z",
+  });
+  mocked.listMessages.mockResolvedValue({ messages: [], count: 0 });
 }
 
 beforeEach(() => {
@@ -62,7 +77,7 @@ describe("Route protection", () => {
   it("lets an authenticated user reach /app", async () => {
     signedIn();
     renderApp(["/app"]);
-    expect(await screen.findByRole("heading", { name: /welcome back/i })).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText(/ask docura anything/i)).toBeInTheDocument();
     expect(mocked.me).toHaveBeenCalledWith("test-token");
   });
 
@@ -70,7 +85,7 @@ describe("Route protection", () => {
   it("redirects an authenticated user away from /login", async () => {
     signedIn();
     renderApp(["/login"]);
-    expect(await screen.findByRole("heading", { name: /welcome back/i })).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText(/ask docura anything/i)).toBeInTheDocument();
   });
 });
 
@@ -82,28 +97,26 @@ describe("Application shell", () => {
     signedIn();
 
     renderApp(["/app"]);
-    await screen.findByRole("heading", { name: /welcome back/i });
+    await screen.findByPlaceholderText(/ask docura anything/i);
 
-    // The sidebar's Sign Out button is always in the DOM (desktop nav).
-    await user.click(screen.getByRole("button", { name: /sign out/i }));
+    // The notch nav's Sign Out control (rendered in both the desktop + mobile notch chrome).
+    await user.click(screen.getAllByRole("button", { name: /sign out/i })[0]);
 
     await waitFor(() => expect(mocked.logout).toHaveBeenCalledWith("test-token"));
     expect(await screen.findByRole("heading", { name: /neural/i })).toBeInTheDocument();
     expect(localStorage.getItem("docura.token")).toBeNull();
   });
 
-  // 12. Responsive navigation renders (mobile trigger + primary nav present).
-  it("renders the primary navigation and the mobile nav trigger", async () => {
+  // 12. Notch navigation renders (mobile menu trigger + primary destinations as tabs).
+  it("renders the notch navigation and the mobile menu trigger", async () => {
     signedIn();
     renderApp(["/app"]);
-    await screen.findByRole("heading", { name: /welcome back/i });
+    await screen.findByPlaceholderText(/ask docura anything/i);
 
-    // Mobile drawer trigger exists (collapsed nav on small screens).
-    expect(screen.getByRole("button", { name: /open navigation/i })).toBeInTheDocument();
-    // Primary nav is present with the foundation destinations.
-    const nav = screen.getByRole("navigation", { name: /primary/i });
-    expect(nav).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /documents/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /activity/i })).toBeInTheDocument();
+    // Compact-island trigger on smaller viewports.
+    expect(screen.getByRole("button", { name: /toggle navigation menu/i })).toBeInTheDocument();
+    // Primary destinations render as notch tabs (real DOCURA routes).
+    expect(screen.getAllByRole("tab", { name: /documents/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("tab", { name: /activity/i }).length).toBeGreaterThan(0);
   });
 });

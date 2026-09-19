@@ -84,20 +84,32 @@ function planField(field, decision, automation, { approvals, context }) {
 // Build the full plan over a snapshot. `record` is the backend AttributeRecordResponse (or
 // null/empty when the user has nothing). `approvals` is the session ledger; `context` carries
 // { userId, sessionId } for approval scoping.
-export function computeFillPlan({ snapshot, record, approvals, context = {} } = {}) {
-  const retrieval = computeRetrieval({ snapshot, record, resolveField });
+export function computeFillPlan({
+  snapshot,
+  record,
+  approvals = new Map(),
+  context = {},
+  // Injectable seams (default: the controlled-form production behaviour). DEMO mode passes its
+  // own resolver/policy/eligibility so the SAME code path drives the dynamic demo — no second
+  // pipeline. Production callers omit these and are unchanged.
+  resolveField: resolveFieldFn = resolveField,
+  fieldAutomation: fieldAutomationFn = fieldAutomation,
+  isEligibleForm = isControlledForm,
+} = {}) {
+  const retrieval = computeRetrieval({ snapshot, record, resolveField: resolveFieldFn });
   const summary = { total: 0, fill: 0, approval_required: 0, ask: 0, unavailable: 0, untouched: 0 };
 
   const forms = (snapshot?.forms ?? []).map((form, fi) => {
     const rForm = retrieval.forms[fi];
     // formId is part of the approval scope key, so bind it into the per-form context.
     const formContext = { ...context, formId: form.formId ?? null };
-    // The approved mapping applies ONLY to the controlled form (M11-D5, §22). On any other
-    // form every field is left untouched — no mapping, no auto-fill, no label guessing.
-    const controlled = isControlledForm(form.formId);
+    // The approved mapping applies ONLY to an eligible form (controlled in production; the demo
+    // form under DEMO mode). On any other form every field is left untouched — no mapping, no
+    // auto-fill, no label guessing.
+    const eligible = isEligibleForm(form.formId);
     const fields = form.fields.map((field, j) => {
       const decision = rForm.fields[j];
-      const automation = controlled ? fieldAutomation(field) : null;
+      const automation = eligible ? fieldAutomationFn(field) : null;
       const entry = planField(field, decision, automation, { approvals, context: formContext });
       summary.total += 1;
       summary[entry.action] += 1;

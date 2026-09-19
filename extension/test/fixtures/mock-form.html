@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DOCURA — Controlled Mock Form (L-STRUCT fixture)</title>
+    <style>
+      body { font: 15px/1.5 system-ui, -apple-system, Segoe UI, sans-serif; max-width: 760px; margin: 2.5rem auto; padding: 0 1rem 4rem; color: #111; }
+      h1 { font-size: 1.3rem; } h2 { font-size: 1rem; margin-top: 2rem; border-bottom: 1px solid #ddd; padding-bottom: .3rem; }
+      .note { background: #fffbe6; border: 1px solid #f0d98a; padding: .75rem 1rem; border-radius: 6px; font-size: .85rem; }
+      label { display: block; margin: .9rem 0; } .req::after { content: " *"; color: #c00; }
+      input, select, textarea { display: block; margin-top: .25rem; padding: .4rem; min-width: 280px; }
+      fieldset { margin: .9rem 0; } .slot { color: #888; font-size: .75rem; font-family: ui-monospace, monospace; }
+      button { margin-top: 1.5rem; padding: .6rem 1.4rem; font-size: 1rem; }
+    </style>
+  </head>
+  <body>
+    <h1>Controlled Mock Application Form</h1>
+
+    <!--
+      DOCURA §10 / ASM-002 controlled mock form — CONSTRUCTION per the team-construction
+      mandate, built strictly to the L-STRUCT layer of SPRINT_4_MOCK_FORM_FIELD_INVENTORY.md.
+
+      WHAT THIS IS: a type-complete (all seven FR-FLD-007 field types) fixture that contains
+      every behavioural slot S1–S10 the inventory fixes, with declared constraints and
+      required flags, so the extension's DETECT → READINESS → RETRIEVAL → MATCHING → REVIEW
+      pipeline can be exercised end to end and its SAFETY properties demonstrated.
+
+      WHAT THIS IS NOT: it does NOT enumerate L-INFO (what personal information each field
+      requests). The inventory records L-INFO as OWED by the team / Study S-3 and forbids
+      inventing it from domain assumption (BR-009 / G-13.11), because doing so would fabricate
+      the discriminating-consumer evidence frozen decision C-a depends on. Field labels here
+      are therefore deliberately STRUCTURAL (slot-referenced), never personal-information
+      semantics. No canonical attribute, field definition, or sensitivity tier is asserted.
+    -->
+    <p class="note">
+      Structural test fixture. Labels are deliberately generic (slot-referenced), not personal-information
+      labels — the information content (L-INFO) is owed by the team per the §10/ASM-002 inventory and is not
+      invented here. With no approved form-field→attribute mapping (G-12/G-13) and no OCR-populated record
+      (S-6), DOCURA will detect every field but map, fill, and match nothing — the honest, safe default.
+    </p>
+
+    <form id="mca-mock" name="mca-mock">
+      <h2>S1 · Seven field types, with constraints &amp; required flags</h2>
+
+      <label class="req">Text field <span class="slot">(S1 text · S2 reformat target)</span>
+        <input type="text" name="field_text_a" id="field_text_a" required maxlength="64" minlength="2" />
+      </label>
+
+      <label>Number field <span class="slot">(S1 number)</span>
+        <input type="number" name="field_number" id="field_number" min="0" max="100" step="1" />
+      </label>
+
+      <label class="req">Date field, declared format constraint <span class="slot">(S1 date · S2)</span>
+        <input type="date" name="field_date" id="field_date" required min="1900-01-01" max="2100-12-31" />
+      </label>
+
+      <label>Static dropdown <span class="slot">(S1 select · S3)</span>
+        <select name="field_select_static" id="field_select_static">
+          <option value="">— choose —</option>
+          <option value="opt_a">Option A</option>
+          <option value="opt_b">Option B</option>
+          <option value="opt_c">Option C</option>
+        </select>
+      </label>
+
+      <fieldset>
+        <legend>Radio group, single-choice <span class="slot">(S1 radio · S5)</span></legend>
+        <label><input type="radio" name="field_radio" value="r1" /> Choice 1</label>
+        <label><input type="radio" name="field_radio" value="r2" /> Choice 2</label>
+      </fieldset>
+
+      <label><input type="checkbox" name="field_checkbox_routine" id="field_checkbox_routine" /> Routine checkbox <span class="slot">(S1 checkbox · S6)</span></label>
+
+      <label class="req">File upload, declared size/format constraints <span class="slot">(S1 file · S8)</span>
+        <input type="file" name="field_file" id="field_file" required accept="application/pdf,image/png,image/jpeg" data-max-size="5MB" />
+      </label>
+
+      <h2>S4 · Dependent dropdown (re-read after its controller changes)</h2>
+      <label>Controller dropdown
+        <select name="field_select_controller" id="field_select_controller">
+          <option value="">— choose —</option>
+          <option value="group_x">Group X</option>
+          <option value="group_y">Group Y</option>
+        </select>
+      </label>
+      <label>Dependent dropdown <span class="slot">(S4 — options change when the controller changes)</span>
+        <select name="field_select_dependent" id="field_select_dependent" disabled>
+          <option value="">— choose controller first —</option>
+        </select>
+      </label>
+
+      <h2>S7 · Ambiguity slot (EC-019: the same field requested twice)</h2>
+      <label>Ambiguous field, instance 1 <span class="slot">(S7)</span>
+        <input type="text" name="field_ambiguous" id="field_ambiguous_1" />
+      </label>
+      <label>Ambiguous field, instance 2 — same <code>name</code> as instance 1 <span class="slot">(S7)</span>
+        <input type="text" name="field_ambiguous" id="field_ambiguous_2" />
+      </label>
+
+      <h2>S9 · Sensitive-approval slot</h2>
+      <label class="req">Sensitive-slot field <span class="slot">(S9 — disclosure would require explicit, itemised approval)</span>
+        <input type="text" name="field_sensitive_slot" id="field_sensitive_slot" required />
+      </label>
+
+      <h2>S10 · Consequential declaration (must be left untouched)</h2>
+      <label><input type="checkbox" name="field_declaration" id="field_declaration" required />
+        I declare that the information provided is true and complete. <span class="slot">(S10 — consequential; DOCURA must never tick this)</span>
+      </label>
+
+      <button type="submit">Submit application</button>
+      <p class="slot">DOCURA never operates this submit control (BR-008). Hand-back returns control to you.</p>
+    </form>
+
+    <script>
+      // Page-side dependent-dropdown behaviour (S4). This is the FORM's own behaviour, not
+      // the extension's — it is here so the extension can demonstrate re-reading a dependent
+      // dropdown after its controller changes (FR-DRP-002/003/008). No DOCURA code runs here.
+      const controller = document.getElementById("field_select_controller");
+      const dependent = document.getElementById("field_select_dependent");
+      const OPTIONS = {
+        group_x: ["X-1", "X-2", "X-3"],
+        group_y: ["Y-1", "Y-2"],
+      };
+      controller.addEventListener("change", () => {
+        const set = OPTIONS[controller.value] || [];
+        dependent.innerHTML = "";
+        if (set.length === 0) {
+          dependent.disabled = true;
+          dependent.append(new Option("— choose controller first —", ""));
+          return;
+        }
+        dependent.disabled = false;
+        dependent.append(new Option("— choose —", ""));
+        for (const v of set) dependent.append(new Option(v, v.toLowerCase()));
+      });
+    </script>
+  </body>
+</html>

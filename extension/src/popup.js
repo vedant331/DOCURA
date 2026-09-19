@@ -30,6 +30,34 @@ function render(state) {
   if (status === "active") {
     $("who-active").textContent = state.userEmail ?? "";
     $("session-id").textContent = state.sessionId ?? "";
+    renderApprovals(state.pending ?? []);
+  }
+}
+
+// Sensitive fields awaiting approval (M10 §13). Each row approves exactly one disclosure;
+// approval does not carry to any other field/form/session (BR-005/BR-007).
+function renderApprovals(pending) {
+  const wrap = $("approvals");
+  const list = $("approvals-list");
+  list.textContent = "";
+  if (!pending.length) {
+    wrap.hidden = true;
+    return;
+  }
+  wrap.hidden = false;
+  for (const item of pending) {
+    const li = document.createElement("li");
+    const label = document.createElement("span");
+    label.textContent = `${item.canonicalIdentifier} → ${item.fieldId}`;
+    const btn = document.createElement("button");
+    btn.textContent = "Approve once";
+    btn.className = "primary";
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      render(await send({ type: "approve", fieldId: item.fieldId }));
+    });
+    li.append(label, btn);
+    list.append(li);
   }
 }
 

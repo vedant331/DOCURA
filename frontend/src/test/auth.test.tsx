@@ -15,6 +15,10 @@ vi.mock("@/lib/api", async (importActual) => {
     logout: vi.fn(),
     requestPasswordReset: vi.fn(),
     confirmPasswordReset: vi.fn(),
+    listDocuments: vi.fn(),
+    listConversations: vi.fn(),
+    createConversation: vi.fn(),
+    listMessages: vi.fn(),
   };
 });
 
@@ -25,11 +29,26 @@ const mocked = api as unknown as {
   me: ReturnType<typeof vi.fn>;
   requestPasswordReset: ReturnType<typeof vi.fn>;
   confirmPasswordReset: ReturnType<typeof vi.fn>;
+  listDocuments: ReturnType<typeof vi.fn>;
+  listConversations: ReturnType<typeof vi.fn>;
+  createConversation: ReturnType<typeof vi.fn>;
+  listMessages: ReturnType<typeof vi.fn>;
 };
 
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
+  // The post-login landing page (/app) mounts the chat + document status card. Resolve those
+  // calls empty so tests that follow the redirect can find the composer.
+  mocked.listDocuments.mockResolvedValue({ documents: [], count: 0 });
+  mocked.listConversations.mockResolvedValue({ conversations: [], count: 0 });
+  mocked.createConversation.mockResolvedValue({
+    id: "c1",
+    title: "New chat",
+    created_at: "2026-02-01T10:00:00Z",
+    updated_at: "2026-02-01T10:00:00Z",
+  });
+  mocked.listMessages.mockResolvedValue({ messages: [], count: 0 });
 });
 
 describe("Login", () => {
@@ -92,7 +111,7 @@ describe("Login", () => {
     await user.type(screen.getByLabelText(/sequence key/i), "hunter2hunter2");
     await user.click(screen.getByRole("button", { name: /initialize stream/i }));
 
-    expect(await screen.findByRole("heading", { name: /welcome back/i })).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText(/ask docura anything/i)).toBeInTheDocument();
     expect(localStorage.getItem("docura.token")).toBe("test-token");
   });
 });
@@ -124,7 +143,7 @@ describe("Register", () => {
     await user.type(screen.getByLabelText(/confirm sequence key/i), "abcdefgh12");
     await user.click(screen.getByRole("button", { name: /create identity/i }));
 
-    expect(await screen.findByRole("heading", { name: /welcome back/i })).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText(/ask docura anything/i)).toBeInTheDocument();
     expect(mocked.register).toHaveBeenCalledWith("new@docura.test", "abcdefgh12");
   });
 });

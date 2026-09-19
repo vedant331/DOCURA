@@ -53,8 +53,8 @@ interface StatusMeta {
 
 const META: Record<Status, StatusMeta> = {
   ready: { label: "Ready", icon: CheckCircle2, tone: "border-emerald-500/40 text-emerald-300" },
-  processing: { label: "Processing", icon: Loader2, tone: "border-sky-500/40 text-sky-300", spin: true },
-  queued: { label: "Queued", icon: Clock, tone: "border-sky-500/30 text-sky-300" },
+  processing: { label: "Processing", icon: Loader2, tone: "border-muted-foreground/40 text-muted-foreground", spin: true },
+  queued: { label: "Queued", icon: Clock, tone: "border-muted-foreground/40 text-muted-foreground" },
   complete: { label: "Complete", icon: CheckCircle2, tone: "border-emerald-500/40 text-emerald-300" },
   failed: { label: "Failed", icon: XCircle, tone: "border-destructive/50 text-destructive" },
   review_required: { label: "Review required", icon: FileWarning, tone: "border-amber-500/40 text-amber-300" },
@@ -69,7 +69,7 @@ const META: Record<Status, StatusMeta> = {
   denied: { label: "Denied", icon: ShieldQuestion, tone: "border-destructive/50 text-destructive" },
   matched: { label: "Matched", icon: Sparkles, tone: "border-emerald-500/40 text-emerald-300" },
   multiple: { label: "Multiple candidates", icon: GitCompareArrows, tone: "border-amber-500/40 text-amber-300" },
-  preparing: { label: "Preparing", icon: Loader2, tone: "border-sky-500/40 text-sky-300", spin: true },
+  preparing: { label: "Preparing", icon: Loader2, tone: "border-muted-foreground/40 text-muted-foreground", spin: true },
   quality_loss: { label: "Quality loss", icon: AlertTriangle, tone: "border-orange-500/50 text-orange-300" },
   declaration: { label: "Declaration — your action", icon: UserRoundCog, tone: "border-amber-500/40 text-amber-300" },
   unknown: { label: "Unknown", icon: CircleHelp, tone: "border-muted-foreground/40 text-muted-foreground" },
