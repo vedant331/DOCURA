@@ -48,13 +48,13 @@ from app.db.models import (
     ExtractionRun,
 )
 
-# The current approved vocabulary artefact. Hard-coded like the vocabulary tests
-# (there is exactly one version); glob when a second version ships.
+# The current vocabulary artefact (v0.2-draft, M12-D3). v0.1-draft is retained as the
+# immutable historical version; pinned by name like the vocabulary tests.
 _VOCAB_PATH = (
     Path(__file__).resolve().parents[2]  # app/services/ -> backend/
     / "config"
     / "vocabulary"
-    / "canonical_attributes.v0.1-draft.toml"
+    / "canonical_attributes.v0.2-draft.toml"
 )
 
 

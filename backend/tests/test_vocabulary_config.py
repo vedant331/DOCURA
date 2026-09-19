@@ -2,16 +2,17 @@
 
 These tests do not evaluate extraction and assert nothing about OCR. They prove one
 thing: that the canonical attribute vocabulary is held as a **structurally valid,
-versioned configuration artefact** whose contents are **exactly** the approved
-G-13 ``v0.1-draft`` — one entry (``person.full_name``), the seven-property shape with
-no eighth property, property 7 (sensitivity tier) TBD by design, the scope-keyed
-cardinality, and the approved N-TEXT normalisation semantics.
+versioned configuration artefact** whose contents are **exactly** the approved G-13
+``v0.2-draft`` — two entries (``person.full_name`` and ``person.date_of_birth``, M12-D3),
+the seven-property shape with no eighth property, property 7 (sensitivity tier) TBD by
+design on BOTH entries, the scope-keyed cardinality, and the approved N-TEXT / N-DATE
+normalisation semantics.
 
-Approved content: PD-B (§21 / register D-05.11) and PD-A/C/D/E (§22 / register
-D-05.12). The authoritative human record is
-``backend/docs/SPRINT_4_G13_CANONICAL_ATTRIBUTE_VOCABULARY.md``; this test guards the
-machine-readable artefact against divergence from it, and against silently widening
-N-TEXT or resolving a tier that G-14/G-15 still own.
+Approved content: PD-B (§21 / register D-05.11) and PD-A/C/D/E (§22 / register D-05.12)
+for the first entry; **M12-D3** (17 Sep 2026) for the second entry and N-DATE. The
+authoritative human record is ``backend/docs/SPRINT_4_G13_CANONICAL_ATTRIBUTE_VOCABULARY.md``;
+this test guards the machine-readable artefact against divergence from it, against silently
+widening N-TEXT/N-DATE, and against resolving a tier that G-14/G-15 still own.
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ except ModuleNotFoundError:  # pragma: no cover - exercised only on older interp
     import tomli as tomllib  # type: ignore[no-redef]
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
-VOCAB_VERSION = "v0.1-draft"
+VOCAB_VERSION = "v0.2-draft"
 VOCAB_PATH = BACKEND_ROOT / "config" / "vocabulary" / f"canonical_attributes.{VOCAB_VERSION}.toml"
 
 # The seven properties of G-13.2, in order. Exactly these — no eighth.
@@ -49,10 +50,23 @@ N_TEXT_KEYS = {
     "raw_value_retained_and_shown",
 }
 
+# N-DATE's approved keys (M12-D3). Exactly these — no widening (no ambiguous-format parsing).
+N_DATE_KEYS = {
+    "applies_to_data_type",
+    "surface_format_is_not_meaning",
+    "calendar_date_is_meaning",
+    "nothing_else_is_folded",
+    "raw_value_retained_and_shown",
+}
+
 
 def _load() -> dict[str, Any]:
     with VOCAB_PATH.open("rb") as handle:
         return tomllib.load(handle)
+
+
+def _entry(identifier: str) -> dict[str, Any]:
+    return next(a for a in _load()["attribute"] if a["canonical_identifier"] == identifier)
 
 
 class TestArtefactStructure:
@@ -67,7 +81,7 @@ class TestArtefactStructure:
         assert f".{VOCAB_VERSION}.toml" in VOCAB_PATH.name
 
     def test_it_is_not_releasable_while_a_tier_is_tbd(self) -> None:
-        """G-13.9: property 7 TBD -> NOT RELEASABLE (gate G-13-B)."""
+        """G-13.9: any property 7 TBD -> NOT RELEASABLE (gate G-13-B). Both tiers are TBD."""
         assert _load()["releasable"] is False
 
     def test_only_the_two_approved_scope_subjects_are_admitted(self) -> None:
@@ -75,18 +89,21 @@ class TestArtefactStructure:
         assert _load()["admitted_scope_subjects"] == ["person", "qualification"]
 
 
-class TestOneApprovedEntry:
-    def test_there_is_exactly_one_attribute(self) -> None:
-        """PD-B item 2: the one-attribute scope. Nine candidates are not authored."""
-        assert len(_load()["attribute"]) == 1
+class TestAuthoredEntries:
+    def test_there_are_exactly_two_attributes(self) -> None:
+        """M12-D3: full_name (PD-B) and date_of_birth. No other candidate is authored."""
+        assert len(_load()["attribute"]) == 2
 
-    def test_the_entry_has_exactly_the_seven_properties_and_no_eighth(self) -> None:
-        attr = _load()["attribute"][0]
-        assert tuple(attr.keys()) == SEVEN_PROPERTIES
+    def test_the_authored_identifiers_are_exactly_these_two(self) -> None:
+        ids = {a["canonical_identifier"] for a in _load()["attribute"]}
+        assert ids == {"person.full_name", "person.date_of_birth"}
+
+    def test_every_entry_has_exactly_the_seven_properties_and_no_eighth(self) -> None:
+        for attr in _load()["attribute"]:
+            assert tuple(attr.keys()) == SEVEN_PROPERTIES
 
     def test_the_person_full_name_entry_is_preserved_exactly(self) -> None:
-        attr = _load()["attribute"][0]
-        assert attr["canonical_identifier"] == "person.full_name"
+        attr = _entry("person.full_name")
         assert attr["display_label"] == "Full name"
         assert attr["semantic_definition"] == (
             "The name of the person who owns the record, "
@@ -95,27 +112,33 @@ class TestOneApprovedEntry:
         assert attr["data_type"] == "text"
         assert attr["normalisation_rule"] == "N-TEXT"
 
-    def test_property_6_is_scope_keyed_cardinality_one_per_person(self) -> None:
-        """FR-ACC-003 makes the record single-person; §12.2 makes a name diff a conflict."""
+    def test_the_person_date_of_birth_entry(self) -> None:
+        attr = _entry("person.date_of_birth")
+        assert attr["display_label"] == "Date of birth"
+        assert attr["data_type"] == "date"
+        assert attr["normalisation_rule"] == "N-DATE"
+
+    def test_every_entry_is_scope_keyed_cardinality_one_per_person(self) -> None:
         data = _load()
-        mult = data["attribute"][0]["multiplicity"]
-        assert mult == {"scope_subject": "person", "cardinality": "one"}
-        assert mult["scope_subject"] in data["admitted_scope_subjects"]
+        for attr in data["attribute"]:
+            mult = attr["multiplicity"]
+            assert mult == {"scope_subject": "person", "cardinality": "one"}
+            assert mult["scope_subject"] in data["admitted_scope_subjects"]
 
-    def test_property_7_sensitivity_tier_is_tbd_with_the_slot_present_and_empty(self) -> None:
-        """FR-INF-007 requires a tier; G-14/G-15 own it (gate G-13-B). TBD by design here."""
-        tier = _load()["attribute"][0]["sensitivity_tier"]
-        assert tier == {"status": "TBD", "value": ""}
+    def test_property_7_sensitivity_tier_is_tbd_on_both_entries(self) -> None:
+        """FR-INF-007 requires a tier; G-14/G-15 own it (gate G-13-B). TBD by design here.
+        No tier content — in particular date_of_birth is NOT stamped sensitive (D-06.5 §D)."""
+        for attr in _load()["attribute"]:
+            assert attr["sensitivity_tier"] == {"status": "TBD", "value": ""}
 
 
-class TestNTextNormalisation:
-    def test_the_entry_references_a_defined_normalisation_rule(self) -> None:
+class TestNormalisationRules:
+    def test_each_entry_references_a_defined_normalisation_rule(self) -> None:
         data = _load()
-        rule = data["attribute"][0]["normalisation_rule"]
-        assert rule in data["normalisation"], "property 5 references an undefined rule"
+        for attr in data["attribute"]:
+            assert attr["normalisation_rule"] in data["normalisation"]
 
     def test_n_text_states_exactly_the_approved_semantics(self) -> None:
-        """The four approved rules (§20.3), and applicability to `text`."""
         nt = _load()["normalisation"]["N-TEXT"]
         assert nt["applies_to_data_type"] == "text"
         assert nt["casing_is_not_meaning"] is True
@@ -125,14 +148,27 @@ class TestNTextNormalisation:
         assert nt["raw_value_retained_and_shown"] is True
 
     def test_n_text_is_not_silently_widened(self) -> None:
-        """No key beyond the approved set — no diacritic/unicode/nickname/edit-distance
-        folding may creep in without re-approval (G-13.5, D-02 §11.6)."""
         assert set(_load()["normalisation"]["N-TEXT"].keys()) == N_TEXT_KEYS
+
+    def test_n_date_states_the_minimum_semantic_date_rule(self) -> None:
+        """M12-D3: same calendar date is one value; a different calendar date is a difference."""
+        nd = _load()["normalisation"]["N-DATE"]
+        assert nd["applies_to_data_type"] == "date"
+        assert nd["surface_format_is_not_meaning"] is True
+        assert nd["calendar_date_is_meaning"] is True
+        assert nd["nothing_else_is_folded"] is True
+        assert nd["raw_value_retained_and_shown"] is True
+
+    def test_n_date_is_not_silently_widened(self) -> None:
+        """No ambiguous-format parsing / century inference / timezone folding creeps in
+        without re-approval (G-13.5, D-02 §11.6)."""
+        assert set(_load()["normalisation"]["N-DATE"].keys()) == N_DATE_KEYS
 
 
 class TestArtefactHoldsOnlyApprovedContent:
-    def test_no_second_normalisation_rule_and_no_sensitivity_content(self) -> None:
-        """Guards the two open gates: no tier content (G-14/G-15), one rule only."""
+    def test_exactly_two_normalisation_rules_and_no_sensitivity_content(self) -> None:
+        """Guards the two open gates: no tier content (G-14/G-15); exactly the two rules."""
         data = _load()
-        assert list(data["normalisation"].keys()) == ["N-TEXT"]
-        assert data["attribute"][0]["sensitivity_tier"]["value"] == ""
+        assert set(data["normalisation"].keys()) == {"N-TEXT", "N-DATE"}
+        for attr in data["attribute"]:
+            assert attr["sensitivity_tier"]["value"] == ""

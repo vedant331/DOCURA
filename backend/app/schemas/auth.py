@@ -74,6 +74,29 @@ class UserResponse(BaseModel):
     created_at: datetime
 
 
+class AccountDeletionRequest(BaseModel):
+    """Explicit confirmation for irreversible account deletion (FR-ACC-007).
+
+    The caller must echo their own account email. This is the explicit confirmation the
+    requirement asks for, and it stops an accidental or forged call from destroying an account.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    confirm_email: EmailStr
+
+
+class AccountDeletionResponse(BaseModel):
+    """What the deletion removed — the record stating what was destroyed (FR-ACC-007)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["deleted"] = "deleted"
+    email: EmailStr
+    documents_removed: int
+    objects_removed: int
+
+
 class LoginResponse(BaseModel):
     """The only response that ever carries a session token."""
 

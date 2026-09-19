@@ -30,10 +30,14 @@ the draft evidence).
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from datetime import date
 from functools import lru_cache
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from app.core.config import Settings
 
 try:  # stdlib on the project's Python 3.12
     import tomllib
@@ -266,14 +270,141 @@ class ControlledFieldExtractor:
         return candidates
 
 
-def build_field_extractor() -> FieldExtractor:
+# ---------------------------------------------------------------------------------------------
+# DEMO field extractor (dev/evaluation only, DOCURA_DEMO_MODE=true) — NOT production-released.
+# ---------------------------------------------------------------------------------------------
+
+_DEMO_VOCAB_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "config"
+    / "vocabulary"
+    / "canonical_attributes.demo.toml"
+)
+
+
+def _normalize_label(raw: str) -> str:
+    """Fold a label for exact alias comparison: lower-case, separators→space, drop other
+    punctuation, collapse whitespace. Meaning-preserving, NOT fuzzy (mirrors the extension's
+    ``normalizeLabel``)."""
+    text = raw.lower()
+    text = re.sub(r"[._\-/]+", " ", text)
+    text = re.sub(r"[^a-z0-9 ]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+@dataclass(frozen=True, slots=True)
+class _DemoVocab:
+    alias_to_canonical: dict[str, str]
+    rule: dict[str, str]
+
+
+@lru_cache(maxsize=1)
+def _load_demo_vocab() -> _DemoVocab:
+    with _DEMO_VOCAB_PATH.open("rb") as handle:
+        data = tomllib.load(handle)
+    alias_to_canonical: dict[str, str] = {}
+    rule: dict[str, str] = {}
+    for entry in data.get("attribute", []):
+        canonical = str(entry["canonical_identifier"])
+        rule[canonical] = str(entry.get("normalisation_rule", "verbatim"))
+        for alias in entry.get("aliases", []):
+            norm = _normalize_label(str(alias))
+            if norm:
+                alias_to_canonical[norm] = canonical
+    return _DemoVocab(alias_to_canonical=alias_to_canonical, rule=rule)
+
+
+def _demo_split(text: str, alias_to_canonical: dict[str, str]) -> tuple[str, str] | None:
+    """Find a labelled key/value in one line: ``Label: Value`` / ``Label - Value`` /
+    ``Label Value``. Returns (canonical_identifier, raw_value) on an EXACT alias match, else
+    None. No fuzzy/substring guessing (BR-009)."""
+    stripped = text.strip()
+    for sep in (":", " - "):
+        if sep in stripped:
+            left, right = stripped.split(sep, 1)
+            canonical = alias_to_canonical.get(_normalize_label(left))
+            if canonical and right.strip():
+                return canonical, right.strip()
+            return None
+    tokens = stripped.split()
+    for k in range(min(len(tokens) - 1, 4), 0, -1):  # longest alias prefix wins; ≥1 value token
+        canonical = alias_to_canonical.get(_normalize_label(" ".join(tokens[:k])))
+        if canonical:
+            value = " ".join(tokens[k:]).strip()
+            if value:
+                return canonical, value
+    return None
+
+
+def _normalise_demo_value(canonical: str, raw: str, rules: dict[str, str]) -> str | None:
+    """Normalise a demo value: N-DATE → ISO (or None if unrecognised); otherwise trim/collapse
+    whitespace. Never guesses a date it cannot parse."""
+    if rules.get(canonical) == "N-DATE":
+        return _normalise_date_of_birth(raw)
+    collapsed = " ".join(raw.split())
+    return collapsed or None
+
+
+class DemoFieldExtractor:
+    """DEMO-ONLY: discover common labelled key/value fields from OCR line blocks using the
+    data-driven demo synonym vocabulary. Same discipline as the controlled extractors —
+    exact alias match, one source block per value, honest confidence, no guessing. Handles a
+    ``Label: Value`` / ``Label Value`` line and a label-only line followed by a value line.
+
+    It is engine-neutral and adds no new architecture — it emits ``CandidateObservation``s the
+    existing observation service persists. It is used ONLY under ``DOCURA_DEMO_MODE``; the
+    attributes it names are demo attributes, not production-released (see the demo vocabulary).
+    """
+
+    name = "demo-dynamic-fields"
+    version = "demo-v1"
+
+    def extract_fields(self, run: ExtractionRun) -> list[CandidateObservation]:
+        vocab = _load_demo_vocab()
+        candidates: list[CandidateObservation] = []
+        for page in run.pages:
+            blocks = list(page.blocks)
+            consumed: set[int] = set()
+            for i, block in enumerate(blocks):
+                if i in consumed:
+                    continue
+                result = _demo_split(block.text, vocab.alias_to_canonical)
+                source = block
+                if result is None:
+                    # A label-only line ("Full Name") takes the next line as its value.
+                    canonical = vocab.alias_to_canonical.get(_normalize_label(block.text))
+                    if canonical is not None and i + 1 < len(blocks):
+                        source = blocks[i + 1]
+                        result = (canonical, source.text.strip())
+                        consumed.add(i + 1)
+                if result is None:
+                    continue
+                canonical, raw_value = result
+                value = _normalise_demo_value(canonical, raw_value, vocab.rule)
+                if value is None:
+                    continue
+                candidates.append(
+                    CandidateObservation(
+                        canonical_identifier=canonical,
+                        value=value,
+                        source_block=source,
+                        confidence=source.confidence,  # measured, or None; never invented
+                    )
+                )
+        return candidates
+
+
+def build_field_extractor(settings: Settings | None = None) -> FieldExtractor:
     """Construct the configured field extractor — the plug point, mirroring D-01.
 
-    Returns the controlled extractor for the currently approved attributes
-    (``person.full_name`` and ``person.date_of_birth``). It is engine-neutral (it maps
-    already-extracted text, not pixels), so it is usable independently of which OCR engine
-    D-01 eventually selects. A later, evaluated, or type-aware extractor replaces it here.
+    Default (production posture): the controlled extractor for the currently approved attributes
+    (``person.full_name`` and ``person.date_of_birth``). When ``settings.demo_mode`` is set
+    (``DOCURA_DEMO_MODE=true``, dev/evaluation only), the DEMO extractor is used instead so the
+    end-to-end dynamic demo can discover common labelled fields. It is engine-neutral, so it is
+    usable independently of which OCR engine D-01 eventually selects.
     """
+    if settings is not None and settings.demo_mode:
+        return DemoFieldExtractor()
     return ControlledFieldExtractor()
 
 

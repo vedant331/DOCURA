@@ -103,6 +103,14 @@ class Settings(BaseSettings):
     # candidate through the normal pipeline; it does NOT select Tesseract for production.
     ocr_engine: OcrEngine = OcrEngine.UNCONFIGURED
 
+    # -- Dynamic demo mode (DEV/EVALUATION only) ------------------------------
+    # When true (DOCURA_DEMO_MODE=true), the field extractor uses the DEMO synonym vocabulary
+    # (canonical_attributes.demo.toml) to discover common labelled key/value fields for the
+    # end-to-end dynamic-autofill demo. It does NOT release those attributes for production and
+    # does NOT change extraction/observation architecture. Default false = production posture
+    # (only the two authored controlled attributes).
+    demo_mode: bool = False
+
     # -- Logging --------------------------------------------------------------
     log_level: LogLevel = LogLevel.INFO
     log_json: bool | None = Field(

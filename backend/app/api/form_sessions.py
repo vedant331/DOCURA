@@ -5,11 +5,16 @@ end it (hand back or stop), and read its history. Identity comes from the sessio
 never from the path: a caller has no vocabulary for another account's sessions, so
 isolation is structural, exactly as in the vault and the record API.
 
-There is no endpoint that appends an arbitrary history entry. History is written by
-DOCURA's own actions — the fill/attach/ask/approval milestones, and the hand-back and
-stop below — never posted by a client, which could otherwise forge a record of what
-DOCURA did. Filling, detection, attachment, and approval are later milestones and are
-not exposed here.
+History is append-only and owner-scoped. The lifecycle transitions (hand-back, stop)
+are written by the backend itself. The in-session effects DOCURA performs on the page —
+fill, select, attach, ask, answer, approval request/decision, override — happen in the
+extension (the execution surface), so they are recorded through ``POST /{id}/actions``
+below. That endpoint is deliberately narrow: it accepts only those in-session action
+types (never a lifecycle transition), only on the caller's own ACTIVE session, and
+validates every referenced id as the caller's own. A client can therefore only ever
+append to its own session's history — it cannot forge another account's record, rewrite
+an ended session, or reference another user's document/observation. No field value or
+form content is ever stored (FR-AUD-006, NFR-PRIV-007).
 """
 
 from __future__ import annotations
@@ -21,12 +26,14 @@ from fastapi import APIRouter, status
 from app.api.deps import CurrentUser, DbSession
 from app.db.models import FormAction, FormSession
 from app.schemas.form_session import (
+    FormActionCreate,
     FormActionListResponse,
     FormActionResponse,
     FormSessionListResponse,
     FormSessionResponse,
 )
 from app.services.form_session import (
+    append_client_action,
     create_form_session,
     get_form_session,
     hand_back,
@@ -157,3 +164,39 @@ async def read_session_history(
         actions=[_action_response(action) for action in actions],
         count=len(actions),
     )
+
+
+@router.post(
+    "/{session_id}/actions",
+    response_model=FormActionResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Record an in-session action DOCURA performed",
+)
+async def record_session_action(
+    session_id: uuid.UUID,
+    payload: FormActionCreate,
+    user: CurrentUser,
+    db: DbSession,
+) -> FormActionResponse:
+    """Append one in-session action to this session's history (FR-AUD-001…003).
+
+    The extension is DOCURA's execution surface: fills, selections, attachments,
+    questions, and approval decisions happen on the page and are reported here so the
+    user's audit reflects what DOCURA actually did. Owner-scoped and forgery-resistant
+    (see the service and the module docstring): only the caller's own ACTIVE session,
+    only in-session action types, only the caller's own referenced documents/observations,
+    and a reversal only of an earlier action in the same session. No value is stored.
+    """
+    action = await append_client_action(
+        db,
+        user_id=user.id,
+        session_id=session_id,
+        action_type=payload.action_type,
+        outcome=payload.outcome,
+        field_ref=payload.field_ref,
+        document_id=payload.document_id,
+        observation_id=payload.observation_id,
+        reverses_action_id=payload.reverses_action_id,
+        detail=payload.detail,
+    )
+    return _action_response(action)

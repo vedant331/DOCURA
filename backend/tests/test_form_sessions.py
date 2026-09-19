@@ -345,3 +345,161 @@ class TestDataMinimisation:
             actions = (await db.scalars(select(FormAction))).all()
         assert sessions == []
         assert actions == []
+
+
+class TestRecordAction:
+    """POST /form-sessions/{id}/actions — the extension records its in-session effects.
+
+    Owner-scoped and forgery-resistant: only the caller's own ACTIVE session, only
+    in-session action types, only the caller's own referenced ids, no field value stored.
+    """
+
+    async def test_records_a_fill_action_and_it_appears_in_history(
+        self, auth_client: AsyncClient
+    ) -> None:
+        token, _user = await register_and_login(auth_client, "a@example.com")
+        created = await _activate(auth_client, token)
+
+        response = await auth_client.post(
+            f"/form-sessions/{created['id']}/actions",
+            headers=auth_header(token),
+            json={
+                "action_type": "fill",
+                "outcome": "succeeded",
+                "field_ref": "#full_name",
+                "detail": "person.full_name",
+            },
+        )
+        assert response.status_code == 201, response.text
+        body = response.json()
+        assert body["action_type"] == "fill"
+        assert body["outcome"] == "succeeded"
+        assert body["field_ref"] == "#full_name"
+        assert "value" not in body  # never a field value
+
+        history = await auth_client.get(
+            f"/form-sessions/{created['id']}/actions", headers=auth_header(token)
+        )
+        types = [a["action_type"] for a in history.json()["actions"]]
+        assert "fill" in types
+
+    async def test_lifecycle_action_types_are_rejected(self, auth_client: AsyncClient) -> None:
+        token, _user = await register_and_login(auth_client, "a@example.com")
+        created = await _activate(auth_client, token)
+        for bad in ("hand_back", "stop"):
+            response = await auth_client.post(
+                f"/form-sessions/{created['id']}/actions",
+                headers=auth_header(token),
+                json={"action_type": bad, "outcome": "succeeded"},
+            )
+            assert response.status_code == 422, f"{bad}: {response.text}"
+
+    async def test_cannot_record_on_an_ended_session(self, auth_client: AsyncClient) -> None:
+        token, _user = await register_and_login(auth_client, "a@example.com")
+        created = await _activate(auth_client, token)
+        await auth_client.post(f"/form-sessions/{created['id']}/stop", headers=auth_header(token))
+
+        response = await auth_client.post(
+            f"/form-sessions/{created['id']}/actions",
+            headers=auth_header(token),
+            json={"action_type": "fill", "outcome": "succeeded", "field_ref": "#x"},
+        )
+        assert response.status_code == 409, response.text
+
+    async def test_another_user_cannot_record_to_the_session(
+        self, auth_client: AsyncClient
+    ) -> None:
+        token_a, _a = await register_and_login(auth_client, "a@example.com")
+        created = await _activate(auth_client, token_a)
+        token_b, _b = await register_and_login(auth_client, "b@example.com")
+
+        response = await auth_client.post(
+            f"/form-sessions/{created['id']}/actions",
+            headers=auth_header(token_b),
+            json={"action_type": "fill", "outcome": "succeeded", "field_ref": "#x"},
+        )
+        assert response.status_code == 404, response.text  # same 404 as a nonexistent session
+
+    async def test_attach_requires_an_owned_document(self, auth_client: AsyncClient) -> None:
+        token, _user = await register_and_login(auth_client, "a@example.com")
+        created = await _activate(auth_client, token)
+
+        # A document owned by someone else must not be referable.
+        token_b, _b = await register_and_login(auth_client, "b@example.com")
+        other_doc = await upload_document(auth_client, token_b)
+        denied = await auth_client.post(
+            f"/form-sessions/{created['id']}/actions",
+            headers=auth_header(token),
+            json={"action_type": "attach", "outcome": "succeeded", "document_id": other_doc["id"]},
+        )
+        assert denied.status_code == 404, denied.text
+
+        # The caller's own document is accepted.
+        own_doc = await upload_document(auth_client, token)
+        ok = await auth_client.post(
+            f"/form-sessions/{created['id']}/actions",
+            headers=auth_header(token),
+            json={"action_type": "attach", "outcome": "succeeded", "document_id": own_doc["id"]},
+        )
+        assert ok.status_code == 201, ok.text
+        assert ok.json()["document_id"] == own_doc["id"]
+
+    async def test_reversal_must_reference_an_action_in_the_same_session(
+        self, auth_client: AsyncClient
+    ) -> None:
+        token, _user = await register_and_login(auth_client, "a@example.com")
+        created = await _activate(auth_client, token)
+
+        # An unknown action id cannot be reversed.
+        missing = await auth_client.post(
+            f"/form-sessions/{created['id']}/actions",
+            headers=auth_header(token),
+            json={
+                "action_type": "override",
+                "outcome": "succeeded",
+                "reverses_action_id": str(uuid.uuid4()),
+            },
+        )
+        assert missing.status_code == 404, missing.text
+
+        # An action from THIS session can be reversed.
+        first = await auth_client.post(
+            f"/form-sessions/{created['id']}/actions",
+            headers=auth_header(token),
+            json={"action_type": "fill", "outcome": "succeeded", "field_ref": "#x"},
+        )
+        reversal = await auth_client.post(
+            f"/form-sessions/{created['id']}/actions",
+            headers=auth_header(token),
+            json={
+                "action_type": "override",
+                "outcome": "succeeded",
+                "field_ref": "#x",
+                "reverses_action_id": first.json()["id"],
+            },
+        )
+        assert reversal.status_code == 201, reversal.text
+        assert reversal.json()["reverses_action_id"] == first.json()["id"]
+
+    async def test_approval_decision_is_auditable(self, auth_client: AsyncClient) -> None:
+        token, _user = await register_and_login(auth_client, "a@example.com")
+        created = await _activate(auth_client, token)
+        response = await auth_client.post(
+            f"/form-sessions/{created['id']}/actions",
+            headers=auth_header(token),
+            json={
+                "action_type": "approval_decision",
+                "outcome": "succeeded",
+                "field_ref": "#sensitive_full_name",
+                "detail": "person.full_name",
+            },
+        )
+        assert response.status_code == 201, response.text
+        assert response.json()["action_type"] == "approval_decision"
+
+    async def test_authentication_is_enforced(self, auth_client: AsyncClient) -> None:
+        response = await auth_client.post(
+            f"/form-sessions/{uuid.uuid4()}/actions",
+            json={"action_type": "fill", "outcome": "succeeded"},
+        )
+        assert response.status_code == 401

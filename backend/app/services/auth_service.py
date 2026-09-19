@@ -10,12 +10,14 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.core.errors import (
+    DeletionNotConfirmedError,
+    DocumentStorageError,
     EmailAlreadyRegisteredError,
     InvalidCredentialsError,
     InvalidResetTokenError,
@@ -32,10 +34,57 @@ from app.core.security import (
     verify_dummy_password,
     verify_password,
 )
-from app.db.models import PasswordResetToken, Session, User
+from app.db.models import Document, PasswordResetToken, Session, User
 from app.services.reset_delivery import ResetDeliveryChannel
+from app.services.storage import DocumentStorage
 
 logger = get_logger(__name__)
+
+
+async def delete_account(
+    db: AsyncSession, *, user: User, confirm_email: str, storage: DocumentStorage
+) -> tuple[int, int]:
+    """Irreversibly delete an account and everything derived from it (FR-ACC-006/007/008,
+    NFR-PRIV-003).
+
+    FR-ACC-007 requires an explicit confirmation: the caller must echo their own account email
+    (case-insensitively). A missing or mismatched confirmation deletes nothing.
+
+    The account row is removed first and committed, then the stored originals are deleted —
+    the same ordering as :func:`app.services.document_service.delete_document`, for the same
+    reason: the only state that can survive a partial failure is orphaned bytes (unreachable,
+    since the key that named them is gone, and sweepable), never a visible record whose file is
+    missing. Deleting the ``users`` row triggers the database's ``ON DELETE CASCADE`` for
+    sessions, reset tokens, documents (→ processing jobs, extraction runs → pages/blocks/
+    observations), and form sessions (→ actions) — so extracted information and derived rows go
+    with it. Returns ``(documents_removed, objects_removed)``; nothing about the values is logged.
+    """
+    if confirm_email.strip().casefold() != user.email.casefold():
+        raise DeletionNotConfirmedError
+
+    result = await db.scalars(select(Document.storage_key).where(Document.user_id == user.id))
+    keys = list(result.all())
+
+    await db.execute(delete(User).where(User.id == user.id))
+    await db.commit()
+
+    objects_removed = 0
+    for key in keys:
+        try:
+            if storage.delete(key):
+                objects_removed += 1
+        except DocumentStorageError:
+            # The account is already gone; a leftover object is an operational sweepable, not
+            # the user's error. No key/value is logged (NFR-PRIV-007).
+            logger.error("account.orphaned_object", reason="delete_failed", user_id=str(user.id))
+
+    logger.info(
+        "account.deleted",
+        user_id=str(user.id),
+        documents_removed=len(keys),
+        objects_removed=objects_removed,
+    )
+    return len(keys), objects_removed
 
 
 def normalise_email(email: str) -> str:

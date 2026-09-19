@@ -1,0 +1,113 @@
+# DOCURA — Canonical Attribute Vocabulary (gap G-13) — version v0.2-draft
+# =============================================================================
+# Versioned CONFIGURATION ARTEFACT. Product-Management-owned, reviewed content;
+# Engineering owns this file's format (G-13.1 content/format split). The
+# authoritative human record is
+#   backend/docs/SPRINT_4_G13_CANONICAL_ATTRIBUTE_VOCABULARY.md
+# and it must not diverge from it. v0.1-draft is retained, immutable, as the
+# historical artefact (G-13.10); this v0.2-draft supersedes it as the current version.
+#
+# WHAT CHANGED FROM v0.1-draft (M12-D3, approved 17 Sep 2026 — see
+# backend/docs/SPRINT_4_M12_G13_G14_G15_DECISION.md and the decision register):
+#   * A SECOND authored entry: `person.date_of_birth` (G-12 §15 candidate; consumer
+#     FR-FILL-001; C-a does not apply — its consumer is not the mock form). Properties
+#     1–6 complete; property 7 (tier) TBD by design.
+#   * A SECOND normalisation rule: `N-DATE`, the minimum-semantic rule for a `date`
+#     attribute (realises G-12's N3; grounded in FR-INF-008 "normalise ... dates ...
+#     without altering meaning"). A conflict-detection behaviour under approved
+#     decision G-13.5; scoped minimally, with ambiguous-format parsing explicitly
+#     excluded (that remains evaluation-dependent, D-02 §11.6).
+#
+# STILL NOT RELEASABLE. Property 7 (sensitivity tier) is TBD on BOTH entries by design
+# (G-13.9, gate G-13-B — content owed by G-14/G-15, blocked on A-5 / studies S-1, S-4).
+# `releasable = false`. No tier content is asserted here: in particular this file does
+# NOT record "date_of_birth = sensitive" — that is a G-14 CONTENT decision A-5 reserves
+# (register D-06.5 §D). The G-15 default (adopted for the controlled MVP by M12-D3 —
+# "an attribute with no assigned tier is treated as sensitive") is a POLICY applied at
+# the controlled-form mapping layer, not a tier written into this artefact.
+#
+# It is a configuration artefact only. It is NOT wired into extraction: D-01's
+# replaceable extraction interface (app/services/extraction.py) is untouched. No date
+# extractor exists (OCR/S-6 blocked), so no `person.date_of_birth` value is produced by
+# the running system; the M12 autofill demonstration uses a test record fixture.
+# =============================================================================
+
+vocabulary_version = "v0.2-draft"
+
+# NOT RELEASABLE: property 7 (sensitivity tier) is TBD by design on every entry
+# (G-13.9, gate G-13-B — content owed by G-14/G-15). Do not set true here.
+releasable = false
+
+# The scope subjects admitted by the approved G-13.2 revision (§9.0.1). No others.
+admitted_scope_subjects = ["person", "qualification"]
+
+# -----------------------------------------------------------------------------
+# Normalisation rules, referenced by an attribute's property 5.
+# -----------------------------------------------------------------------------
+
+# N-TEXT — approved minimum-semantic rule for a `text` attribute (PD-B, §20.3 / §21.1).
+# Unchanged from v0.1-draft.
+[normalisation.N-TEXT]
+applies_to_data_type = "text"
+casing_is_not_meaning = true                    # 1
+whitespace_run_length_is_not_meaning = true     # 2 (edge + inter-token run length)
+edge_whitespace_is_not_meaning = true           # 2
+nothing_else_is_folded = true                   # 3 (any other difference is a difference)
+raw_value_retained_and_shown = true             # 4 (G-13.6; comparison-time form only)
+# Deliberately NOT decided by N-TEXT (see v0.1-draft): unicode NF, diacritic folding,
+# transliteration, punctuation folding, token reordering, alias/nickname, edit distance.
+
+# N-DATE — minimum-semantic rule for a `date` attribute (M12-D3; realises G-12's N3;
+# FR-INF-008 "dates ... without altering meaning"). Comparison-time form only; the raw
+# as-printed value is what the user sees. Two values are equal iff they denote the same
+# calendar date; a different calendar date is a difference.
+[normalisation.N-DATE]
+applies_to_data_type = "date"
+surface_format_is_not_meaning = true    # 1 — "1990-02-01" == "01 Feb 1990" == "1990/02/01"
+calendar_date_is_meaning = true         # 2 — a different year/month/day IS a difference
+nothing_else_is_folded = true           # 3 — any other difference is a difference
+raw_value_retained_and_shown = true     # 4 (G-13.6; comparison-time form only)
+# Deliberately NOT decided by N-DATE, and therefore NOT enabled — each is evaluation-
+# dependent (D-02 §11.6) and ambiguous without real-corpus evidence: locale-ambiguous
+# day/month order (DD/MM vs MM/DD), two-digit-year century inference, partial-date
+# completion, timezone/locale shifting, and calendar-system conversion. Adding any is a
+# conflict-detection change requiring re-approval (G-13.5).
+
+# -----------------------------------------------------------------------------
+# The vocabulary. Two authored entries (M12-D3). Exactly seven properties per entry;
+# no eighth (G-13.2). Property order: 1 identifier · 2 display label · 3 semantic
+# definition · 4 data type · 5 normalisation rule · 6 multiplicity · 7 tier.
+# -----------------------------------------------------------------------------
+
+[[attribute]]
+canonical_identifier = "person.full_name"                                                   # 1
+display_label = "Full name"                                                                  # 2
+semantic_definition = "The name of the person who owns the record, as printed on a document that evidences it."  # 3
+data_type = "text"                                                                           # 4
+normalisation_rule = "N-TEXT"                                                                # 5
+
+[attribute.multiplicity]
+scope_subject = "person"
+cardinality = "one"
+
+[attribute.sensitivity_tier]
+status = "TBD"
+value = ""
+
+[[attribute]]
+canonical_identifier = "person.date_of_birth"                                                # 1
+display_label = "Date of birth"                                                              # 2
+semantic_definition = "The calendar date on which the person who owns the record was born, as printed on a document that evidences it."  # 3
+data_type = "date"                                                                           # 4
+normalisation_rule = "N-DATE"                                                                # 5
+
+[attribute.multiplicity]
+scope_subject = "person"
+cardinality = "one"
+
+# 7 — tier TBD by design (G-14/G-15, gate G-13-B). No tier content asserted (D-06.5 §D):
+# the controlled MVP treats an un-tiered attribute as sensitive via the G-15 default POLICY
+# at the mapping layer — this artefact records no tier here.
+[attribute.sensitivity_tier]
+status = "TBD"
+value = ""

@@ -66,7 +66,7 @@ _VOCAB_PATH = (
     Path(__file__).resolve().parents[1]
     / "config"
     / "vocabulary"
-    / "canonical_attributes.v0.1-draft.toml"
+    / "canonical_attributes.v0.2-draft.toml"
 )
 
 

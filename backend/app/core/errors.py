@@ -186,6 +186,21 @@ class FormSessionNotActiveError(DocuraError):
     remediation = "Activate DOCURA again on the form to start a new session."
 
 
+class FormActionNotFoundError(DocuraError):
+    """A referenced form action (e.g. the action a correction reverses) is not in this
+    session, or does not exist.
+
+    404, and identical whether the id names nothing or an action in another session —
+    the same oracle-avoidance as :class:`FormSessionNotFoundError`. A reversal may only
+    point at an earlier action of the same, owner-scoped session.
+    """
+
+    status_code = status.HTTP_404_NOT_FOUND
+    title = "Form action not found"
+    detail = "No such action exists in this form session."
+    remediation = "Reference an action recorded earlier in the same session."
+
+
 class UnsupportedDocumentError(DocuraError):
     """The file is not one of the accepted types, or is not readable as one.
 
@@ -279,6 +294,20 @@ class ExtractionNotConfiguredError(DocumentExtractionError):
 
     detail = "DOCURA cannot read documents yet: no extraction engine is configured."
     remediation = "Your file is stored and unchanged. Document reading is not available yet."
+
+
+class DeletionNotConfirmedError(DocuraError):
+    """Account deletion was requested without the explicit confirmation FR-ACC-007 requires.
+
+    Account deletion is irreversible and removes the account, every document, all extracted
+    information, and every derived copy (NFR-PRIV-003). The caller must confirm explicitly by
+    echoing their own account email; a missing or mismatched confirmation makes nothing happen.
+    """
+
+    status_code = status.HTTP_400_BAD_REQUEST
+    title = "Deletion not confirmed"
+    detail = "Account deletion was not confirmed."
+    remediation = "Re-send the request confirming your account email exactly to proceed."
 
 
 class RateLimitedError(DocuraError):

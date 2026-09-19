@@ -47,7 +47,7 @@ async def _serve(settings: Settings) -> None:
     # The field-extraction seam (blocks → attribute candidates). Engine-neutral, so it
     # is usable whatever OCR engine D-01 selects; today it only runs on the success path,
     # which the unconfigured extractor never reaches.
-    field_extractor = build_field_extractor()
+    field_extractor = build_field_extractor(settings)
 
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()

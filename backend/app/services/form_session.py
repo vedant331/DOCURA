@@ -21,9 +21,18 @@ import uuid
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import FormSessionNotActiveError, FormSessionNotFoundError
+from app.core.errors import (
+    AttributeNotFoundError,
+    DocumentNotFoundError,
+    FormActionNotFoundError,
+    FormSessionNotActiveError,
+    FormSessionNotFoundError,
+)
 from app.core.logging import get_logger
 from app.db.models import (
+    AttributeObservation,
+    Document,
+    ExtractionRun,
     FormAction,
     FormActionOutcome,
     FormActionType,
@@ -112,6 +121,93 @@ async def record_action(
     )
     db.add(action)
     await db.flush()
+    return action
+
+
+async def append_client_action(
+    db: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    session_id: uuid.UUID,
+    action_type: FormActionType,
+    outcome: FormActionOutcome,
+    field_ref: str | None = None,
+    document_id: uuid.UUID | None = None,
+    observation_id: uuid.UUID | None = None,
+    reverses_action_id: uuid.UUID | None = None,
+    detail: str | None = None,
+) -> FormAction:
+    """Record one in-session action the extension performed (FR-AUD-001…003).
+
+    This is the client-facing writer that :func:`record_action` (the internal writer)
+    could not be: it is fully owner-scoped and refuses anything a client should not be
+    able to forge —
+
+      * the session must belong to the caller and still be ACTIVE (history of an ended
+        session is immutable);
+      * every referenced id is validated as the caller's own — a ``document_id`` via the
+        owner-scoped vault query, an ``observation_id`` via its run→document→user chain,
+        and a ``reverses_action_id`` must name an earlier action of THIS session;
+      * lifecycle transitions (hand_back / stop) are not accepted here (the schema bars
+        them) — they have their own endpoints and move the session's state.
+
+    No field value or third-party form content is stored — only a field handle and
+    provenance references (FR-AUD-006, NFR-PRIV-007). Commits so the entry is durable.
+    """
+    session = await get_form_session(db, user_id=user_id, session_id=session_id)
+    if session.state is not FormSessionState.ACTIVE:
+        raise FormSessionNotActiveError
+
+    if document_id is not None:
+        # Owner-scoped: raises 404 (indistinguishable from "no such document") if not owned.
+        owned = await db.scalar(
+            select(Document.id).where(Document.id == document_id, Document.user_id == user_id)
+        )
+        if owned is None:
+            raise DocumentNotFoundError
+
+    if observation_id is not None:
+        # An observation is owned via run -> document -> user. Same oracle-avoidance 404.
+        owned_obs = await db.scalar(
+            select(AttributeObservation.id)
+            .join(ExtractionRun, AttributeObservation.run_id == ExtractionRun.id)
+            .join(Document, ExtractionRun.document_id == Document.id)
+            .where(AttributeObservation.id == observation_id, Document.user_id == user_id)
+        )
+        if owned_obs is None:
+            raise AttributeNotFoundError
+
+    if reverses_action_id is not None:
+        # A reversal may only point at an earlier action of this same (owned) session.
+        reversed_ok = await db.scalar(
+            select(FormAction.id).where(
+                FormAction.id == reverses_action_id,
+                FormAction.session_id == session.id,
+            )
+        )
+        if reversed_ok is None:
+            raise FormActionNotFoundError
+
+    action = await record_action(
+        db,
+        session=session,
+        action_type=action_type,
+        outcome=outcome,
+        field_ref=field_ref,
+        source_document_id=document_id,
+        source_observation_id=observation_id,
+        reverses_action_id=reverses_action_id,
+        detail=detail,
+    )
+    await db.commit()
+    await db.refresh(action)
+    logger.info(
+        "form_session.action_recorded",
+        user_id=str(user_id),
+        session_ref=str(session.id),
+        action_type=action_type.value,
+        outcome=outcome.value,
+    )
     return action
 
 

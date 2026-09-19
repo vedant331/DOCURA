@@ -343,6 +343,18 @@ The specification names the corpus obligation and nothing else about it. In part
 
 **Amendments that should follow, per the approved document's own §15.3:** raising evaluation-corpus governance (G-02), the re-evaluation trigger (G-03), security-event recording (G-26), and the definition of the artefact that proves AR-AST-008 was met (D-02.o) as specification amendments. Until then, the gaps stand as gaps.
 
+## D-02.7 M14 — S-6 re-evaluation — 17 September 2026 — outcome E: BLOCKED, MORE CORPUS REQUIRED
+
+**Status: NO NEW DECISION. S-6 re-audited; D-02's blocking status is unchanged.** The full re-evaluation is [`SPRINT_4_M14_S6_OCR_EVALUATION.md`](SPRINT_4_M14_S6_OCR_EVALUATION.md). Findings, verified directly against the repository (not assumed):
+
+- **Held-out corpus: does not exist.** No corpus, ground truth, or document store is present anywhere in the repository (only `step3.pdf`, the spec itself). AR-AST-008 requires "a held-out corpus of real, imperfect documents." **BLOCKED.**
+- **No OCR engine installed** (none in `pyproject.toml` or the venv) — correct: D-01 built the port deliberately unselected, and D-02 §6 forbids selecting before evaluation.
+- **Thresholds** (BR-001 automatic-action; review threshold) remain **TBD/G-04**; D-02 forbids setting them before the evaluation runs.
+- **Stage-2** (field extraction, calibration, §7.1 type inclusion) additionally gated on **G-12** (per-type field sets unauthored beyond `person.full_name` + `person.date_of_birth`) and **G-14/G-15**.
+- **Extractor seam is READY** (`app/services/extraction.py`: `DocumentExtractor` protocol + `TextRegion/TextBlock/ExtractedPage/ExtractionResult` + `UnconfiguredExtractor`). An approved engine drops in behind it with no architecture change.
+
+**No engine chosen, no corpus created (dummy data is forbidden — D-02.4), no code changed, no threshold set, `step3.pdf` unamended.** The unblock path is unchanged: run the G-02-governed corpus collection, then the D-02 stage-1 evaluation. **Owner:** the corpus needs the named Corpus/Held-Out Custodians and the consented collection process (G-02); this is a real-world data operation, not an engineering task.
+
 ---
 
 # D-03 — Confidence model and thresholds
@@ -942,6 +954,21 @@ A person legitimately holds several qualifications, each with its own year of pa
 **What this does not do.** Adds no canonical vocabulary entry; approves none of the ten G-12 candidates; repairs none of C-a…C-d; changes no approved G-13 shape; sets no sensitivity tier or threshold; closes neither REQUIREMENTS GAP G-12 nor G-13; touches no production code, schema, migration, dependency, fixture, or `backend/step3.pdf`. **No commit, no push.**
 
 **Owner:** Engineering (the artefact — an evidence record); the **team** owns MF2 (construct the form / run S-3); PM owns any decision the populated §4.1 later enables.
+
+---
+
+## D-05.16 M12-D3 — PRODUCT DECISION — APPROVED — 17 September 2026 — G-15 controlled-MVP default; `person.date_of_birth` authored (v0.2-draft)
+
+**Status: PRODUCT DECISION — APPROVED 17 September 2026.** Approved by Product Management (M12-D3) and binding on implementation as a project decision. The full analysis is [`SPRINT_4_M12_G13_G14_G15_DECISION.md`](SPRINT_4_M12_G13_G14_G15_DECISION.md). Approval covers exactly two things:
+
+1. **G-15 controlled-MVP default = sensitive (POLICY, not tier content).** For the controlled MVP, an attribute carrying **no assigned sensitivity tier** is treated as **sensitive** — disclosed only through the per-instance approval gate (FR-SENS-002/BR-005), never auto-filled. This adopts the D-06.4 recommendation *for the controlled MVP only*. It is a **default policy applied at the controlled-form mapping layer**; it writes **no tier into any attribute** and does **not** resolve G-14 content or G-15 in general (A-5 / studies S-1, S-4 remain the settlers).
+2. **`person.date_of_birth` authored** as vocabulary version **`v0.2-draft`** — properties 1–6 complete (data type `date`; new normalisation rule **N-DATE**, the minimum-semantic date rule realising G-12's N3 under FR-INF-008, ambiguous-format parsing excluded pending evaluation, G-13.5); **property 7 (tier) TBD by design.** Its consumer is **FR-FILL-001** directly, so **C-a does not apply** (C-a governs the nine mock-form-dependent candidates; DOB is not one). `v0.1-draft` is retained immutable (G-13.10).
+
+**What this does NOT do.** It assigns **no sensitivity tier** to any attribute — in particular it does **not** record "date_of_birth = sensitive" (that is G-14 CONTENT, reserved to A-5; register D-06.5 §D). It does **not** resolve **G-14 content**, **G-15** (general), **G-13-B**, or **A-5/A-7**. The vocabulary stays **NOT RELEASABLE** (`releasable = false`; both tiers TBD). **G-13-B remains NOT MET** — the status lines are unchanged and remain correct. It amends no line of `backend/step3.pdf`.
+
+**Consequence.** The controlled MVP now fills a **second** field: `person.date_of_birth`, **consent-gated** (approval before disclosure) via the G-15 default. `person.full_name` remains **auto-filled** — the one documented exception (M10-D2), where FR-FILL-001's *form-field* routine classification (FR-FLD-003, a distinct unit from the attribute tier per FR-SENS-001) governs. All safety gates (unknown untouched, ambiguity/conflict ask, declaration never touched, exact-scope one-time approval, provenance) are preserved and unweakened.
+
+**Owner:** Product Management (the two decisions); Engineering (the v0.2-draft artefact, the extension mapping, and tests).
 
 ---
 

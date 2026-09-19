@@ -1661,3 +1661,27 @@ The T1 completion pass (§20, 6 September 2026) *proposed* these three items and
 | Production code, schema, migrations, dependencies touched | **No** |
 | Documents collected or created / OCR installed or run | **0 / No** |
 | Commit or push performed | **No** |
+
+## 23. M12-D3 — SECOND ENTRY AND N-DATE — APPROVED (17 September 2026) — vocabulary version v0.2-draft
+
+**Status: PRODUCT DECISION — APPROVED 17 September 2026 (register D-05.16).** This section records the authored content of vocabulary version **`v0.2-draft`**, which supersedes `v0.1-draft` as the current version. `v0.1-draft` is retained immutable (G-13.10). The machine-readable artefact is `config/vocabulary/canonical_attributes.v0.2-draft.toml`; this section is its authoritative human record, and the two must not diverge.
+
+**What v0.2-draft adds to v0.1-draft (nothing removed):**
+
+1. **A second authored entry — `person.date_of_birth`** (a G-12 §15 candidate; consumer **FR-FILL-001** directly, so **C-a does not apply** — C-a governs the nine mock-form-dependent candidates, and date of birth is not one):
+
+   | Property | Value |
+   | --- | --- |
+   | 1 canonical_identifier | `person.date_of_birth` |
+   | 2 display_label | Date of birth |
+   | 3 semantic_definition | The calendar date on which the person who owns the record was born, as printed on a document that evidences it. |
+   | 4 data_type | `date` |
+   | 5 normalisation_rule | `N-DATE` |
+   | 6 multiplicity | one per `person` |
+   | 7 sensitivity_tier | **TBD by design** (G-14/G-15, gate G-13-B) — no tier content asserted |
+
+2. **A second normalisation rule — `N-DATE`** (realises G-12's N3; grounded in FR-INF-008 "normalise … dates … without altering meaning"; a conflict-detection behaviour under G-13.5). Minimum semantic: two values are equal iff they denote the **same calendar date**; **surface format is not meaning**; **a different calendar date is a difference**; nothing else is folded; the raw as-printed value is retained and shown. **Deliberately excluded (evaluation-dependent, D-02 §11.6):** locale-ambiguous day/month order, two-digit-year century inference, partial-date completion, timezone/locale shifting, calendar-system conversion. Widening N-DATE requires re-approval (G-13.5).
+
+**What this does NOT do.** It assigns **no** sensitivity tier — in particular it does **not** record "date_of_birth = sensitive" (that is G-14 CONTENT, reserved to assumption A-5; register D-06.5 §D). It does not resolve G-14 content, G-15 (general), G-13-B, or A-5/A-7. Both entries keep property 7 TBD, so v0.2-draft is **NOT RELEASABLE** (`releasable = false`). The G-15 **default** adopted by M12-D3 (un-tiered attribute → treated sensitive → consent-gated) is a **policy applied at the controlled-form mapping layer**, not a tier written here. No line of `backend/step3.pdf` is amended.
+
+**Consumer / usage.** In the controlled MVP, `person.date_of_birth` is filled **only after per-instance user approval** (the G-15 default), via the extension's existing approval path; `person.full_name` remains auto-filled under the documented M10-D2 form-field-classification exception. All safety gates are preserved.

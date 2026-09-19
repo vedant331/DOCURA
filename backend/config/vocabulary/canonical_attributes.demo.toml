@@ -1,0 +1,80 @@
+# DOCURA — DEMO-ONLY canonical attribute vocabulary + label synonyms.
+# =============================================================================
+# *** THIS FILE IS FOR THE LOCAL DYNAMIC DEMO ONLY. IT IS NOT PRODUCTION-RELEASED. ***
+#
+# It exists so the demo can show upload → OCR → dynamic key/value extraction →
+# structured record → dynamic form autofill across common personal-information
+# fields. The production/released vocabulary remains
+# `canonical_attributes.v0.2-draft.toml` (two authored, non-releasable attributes).
+#
+# Nothing here asserts governance approval. These attributes are NOT G-13-released,
+# their sensitivity tiers here are DEMO defaults (not the A-5/G-14 user-set tiers),
+# and this file is loaded ONLY when DOCURA_DEMO_MODE=true (dev/evaluation opt-in).
+# See backend/docs/DEMO_DYNAMIC_AUTOFILL.md.
+#
+# `normalisation_rule`: N-TEXT (fold case/whitespace), N-DATE (ISO date), or
+#   "verbatim" (store trimmed as read). `sensitivity`: "routine" or "sensitive"
+#   (DEMO default — sensitive fields require explicit per-disclosure approval).
+# `aliases`: the label synonyms the deterministic extractor/interpreter match
+#   EXACTLY (after normalisation). Data-driven — extend the lists, not the code.
+# =============================================================================
+
+vocabulary_version = "demo-v1"
+releasable = false
+demo_only = true
+
+[[attribute]]
+canonical_identifier = "person.full_name"
+data_type = "text"
+normalisation_rule = "N-TEXT"
+sensitivity = "routine"
+aliases = ["full name", "name", "applicant name", "candidate name"]
+
+[[attribute]]
+canonical_identifier = "person.date_of_birth"
+data_type = "date"
+normalisation_rule = "N-DATE"
+sensitivity = "sensitive"
+aliases = ["date of birth", "dob", "d o b", "birth date", "birthdate"]
+
+[[attribute]]
+canonical_identifier = "person.age"
+data_type = "text"
+normalisation_rule = "verbatim"
+sensitivity = "routine"
+aliases = ["age", "applicant age"]
+
+[[attribute]]
+canonical_identifier = "person.email"
+data_type = "text"
+normalisation_rule = "verbatim"
+sensitivity = "routine"
+aliases = ["email", "email address", "e mail"]
+
+[[attribute]]
+canonical_identifier = "person.phone"
+data_type = "text"
+normalisation_rule = "verbatim"
+sensitivity = "routine"
+aliases = ["phone", "phone number", "mobile", "mobile number", "contact number"]
+
+[[attribute]]
+canonical_identifier = "person.address"
+data_type = "text"
+normalisation_rule = "verbatim"
+sensitivity = "routine"
+aliases = ["address", "residential address", "permanent address", "current address"]
+
+[[attribute]]
+canonical_identifier = "identity.pan_number"
+data_type = "text"
+normalisation_rule = "verbatim"
+sensitivity = "sensitive"
+aliases = ["pan", "pan number", "pan card number", "permanent account number"]
+
+[[attribute]]
+canonical_identifier = "identity.aadhaar_number"
+data_type = "text"
+normalisation_rule = "verbatim"
+sensitivity = "sensitive"
+aliases = ["aadhaar", "aadhar", "aadhaar number", "aadhaar card number", "uidai number"]
