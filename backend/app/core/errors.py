@@ -201,6 +201,20 @@ class FormActionNotFoundError(DocuraError):
     remediation = "Reference an action recorded earlier in the same session."
 
 
+class ConversationNotFoundError(DocuraError):
+    """No conversation with that id is readable by the requesting account.
+
+    404, and identical whether the id names nothing or another account's conversation — the
+    same oracle-avoidance as :class:`DocumentNotFoundError` (NFR-SEC-003). Ownership is a
+    ``WHERE`` clause, never a post-load check.
+    """
+
+    status_code = status.HTTP_404_NOT_FOUND
+    title = "Conversation not found"
+    detail = "No conversation with that identifier is available to this account."
+    remediation = "Check the identifier against your conversations and try again."
+
+
 class UnsupportedDocumentError(DocuraError):
     """The file is not one of the accepted types, or is not readable as one.
 

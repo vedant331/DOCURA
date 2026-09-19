@@ -75,6 +75,8 @@ append to their own session's history).
 | POST | `/auth/password-reset/request` `/auth/password-reset/confirm` | Reset |
 | GET | `/users/me` | Authenticated account |
 | DELETE | `/users/me` | Delete the account + all data (FR-ACC-006/007/008), explicit-confirmation |
+| POST/GET/GET/PATCH/DELETE | `/conversations` `…/{id}` | Chatbot conversations (additive layer; see CHATBOT_BACKEND.md) |
+| POST/GET | `/conversations/{id}/messages` | Send a message (orchestrated) / list history |
 | GET/POST/DELETE | `/documents` `…/{id}` `…/{id}/content` `…/{id}/reprocess` `/documents/limits` | Vault |
 | GET | `/record/attributes` `/record/attributes/{canonical_identifier}` | Structured record + field lookup |
 | POST/GET | `/form-sessions` `…/{id}` | Session activate/list/read |

@@ -42,6 +42,20 @@ class LogLevel(StrEnum):
     CRITICAL = "CRITICAL"
 
 
+class LlmProvider(StrEnum):
+    """Which LLM backs the chatbot's language-understanding (intent) layer.
+
+    The default is ``NONE`` — the deterministic keyword provider is used, and no data leaves the
+    backend. ``OPENAI_COMPATIBLE`` calls a configured OpenAI-style ``/chat/completions`` endpoint
+    (any vendor or gateway via ``DOCURA_LLM_BASE_URL``) for intent classification ONLY, with a
+    deterministic fallback on any failure. The LLM never becomes the source of truth and cannot
+    override DOCURA's safety rules. An unrecognised value is a startup configuration error.
+    """
+
+    NONE = "none"
+    OPENAI_COMPATIBLE = "openai_compatible"
+
+
 class OcrEngine(StrEnum):
     """Which extraction engine :func:`build_document_extractor` constructs.
 
@@ -110,6 +124,19 @@ class Settings(BaseSettings):
     # does NOT change extraction/observation architecture. Default false = production posture
     # (only the two authored controlled attributes).
     demo_mode: bool = False
+
+    # -- Chatbot LLM (intent understanding only) ------------------------------
+    # DOCURA_LLM_PROVIDER=none (default) uses the deterministic intent provider; no data leaves
+    # the backend. `openai_compatible` calls DOCURA_LLM_BASE_URL's /chat/completions with
+    # DOCURA_LLM_MODEL + DOCURA_LLM_API_KEY for intent classification ONLY (bounded, value-free),
+    # falling back to deterministic on any failure. Secrets come from the environment, never
+    # source. If the provider is set but the key/model is missing, the deterministic provider is
+    # used (treated as unconfigured), never a crash.
+    llm_provider: LlmProvider = LlmProvider.NONE
+    llm_model: str = ""
+    llm_base_url: str = "https://api.openai.com/v1"
+    llm_api_key: SecretStr | None = None
+    llm_timeout_seconds: Annotated[float, Field(gt=0, le=60)] = 12.0
 
     # -- Logging --------------------------------------------------------------
     log_level: LogLevel = LogLevel.INFO
@@ -250,6 +277,16 @@ class Settings(BaseSettings):
     def expose_error_detail(self) -> bool:
         """Only non-production environments may see internal failure detail."""
         return self.environment is not Environment.PRODUCTION
+
+    @property
+    def llm_configured(self) -> bool:
+        """True when a live LLM intent provider is usable. A provider set without a key/model is
+        treated as unconfigured (deterministic fallback), never a crash. Reveals no secret."""
+        return (
+            self.llm_provider is not LlmProvider.NONE
+            and self.llm_api_key is not None
+            and bool(self.llm_model.strip())
+        )
 
 
 def _declared_names() -> set[str]:

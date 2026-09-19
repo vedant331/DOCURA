@@ -260,14 +260,12 @@ class TestMigration:
             engine.dispose()
 
     def test_no_later_milestone_tables_are_created(self, scratch_database: str) -> None:
-        """The schema stops exactly at M1 — nothing a later milestone will define.
-
-        A table added early is a shape committed to before the requirement that would
-        have defined it. As of M1 the schema is accounts, the vault, the D-09
-        processing job, the extraction/observation layers, and the form-session and
-        audit foundation. What is still absent is everything the form-action pipeline
-        will define — no fill/attach/approval *result* tables, no per-disclosure
-        approval record, no review artefact — because those milestones do not exist yet.
+        """The schema is exactly the approved set: accounts, the vault, the D-09 processing
+        job, the extraction/observation layers, the form-session/audit foundation, and the
+        additive chatbot layer (conversations + messages). What is still absent is everything
+        the form-action pipeline will define — no fill/attach/approval *result* tables, no
+        per-disclosure approval record, no review artefact — because those milestones do not
+        exist yet. A table added early is a shape committed to before its requirement.
         """
         assert _run_alembic("upgrade", "head", dsn=scratch_database).returncode == 0
 
@@ -290,6 +288,8 @@ class TestMigration:
             "attribute_observations",
             "form_sessions",
             "form_actions",
+            "conversations",
+            "conversation_messages",
             "alembic_version",
         }
 

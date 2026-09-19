@@ -31,6 +31,7 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy import Enum as SqlEnum
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -900,4 +901,121 @@ class FormAction(Base):
     __table_args__ = (
         # Viewing a session's history in order (FR-AUD-004) filters by session, by time.
         Index("ix_form_actions_session_id_created_at", "session_id", "created_at"),
+    )
+
+
+# =============================================================================
+# Chatbot orchestration layer (additive) — conversations + messages.
+#
+# A conversation is one authenticated user's chat thread with DOCURA's assistant.
+# It is DELIBERATELY isolated from the domain tables: deleting a conversation removes
+# only its messages, never the user's documents, record, sessions, or history. The
+# assistant is an ORCHESTRATOR over existing services (record, documents, form
+# sessions) — no third-party form content, no raw sensitive values, and no secrets
+# are stored on a message (NFR-PRIV-007); structured blocks carry statuses and
+# references only.
+# =============================================================================
+
+
+class ConversationMessageRole(enum.StrEnum):
+    """Who authored a message. ``system`` is for internal/tool notes, not shown as chat."""
+
+    USER = "user"
+    ASSISTANT = "assistant"
+    SYSTEM = "system"
+
+
+class ConversationMessageType(enum.StrEnum):
+    """The shape of an assistant message, so the client can render it richly. A user
+    message is always ``text``."""
+
+    TEXT = "text"
+    REQUIREMENTS = "requirements"
+    DOCUMENT_STATUS = "document_status"
+    READINESS = "readiness"
+    QUESTION = "question"
+    APPROVAL = "approval"
+    ACTION = "action"
+    ERROR = "error"
+
+
+class Conversation(Base):
+    """One authenticated user's chat thread. Owned by exactly one account; ``user_id`` is
+    the whole of its access control (NFR-SEC-003)."""
+
+    __tablename__ = "conversations"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    title: Mapped[str] = mapped_column(String(200), nullable=False, default="New conversation")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    messages: Mapped[list[ConversationMessage]] = relationship(
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="ConversationMessage.created_at",
+    )
+
+    __table_args__ = (
+        # A user's conversation list, most-recently-active first.
+        Index("ix_conversations_user_id_updated_at", "user_id", "updated_at"),
+    )
+
+
+class ConversationMessage(Base):
+    """One message in a conversation. ``content`` is human-readable text; ``data`` carries
+    value-free structured blocks (requirement statuses, readiness, actions) for the client
+    to render — never raw form content or sensitive values."""
+
+    __tablename__ = "conversation_messages"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    conversation_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("conversations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    role: Mapped[ConversationMessageRole] = mapped_column(
+        SqlEnum(
+            ConversationMessageRole,
+            name="conversation_message_role",
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=False,
+    )
+    message_type: Mapped[ConversationMessageType] = mapped_column(
+        SqlEnum(
+            ConversationMessageType,
+            name="conversation_message_type",
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=False,
+        default=ConversationMessageType.TEXT,
+    )
+    content: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    data: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    conversation: Mapped[Conversation] = relationship(back_populates="messages")
+
+    __table_args__ = (
+        Index(
+            "ix_conversation_messages_conversation_id_created_at", "conversation_id", "created_at"
+        ),
     )

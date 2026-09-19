@@ -23,6 +23,9 @@ dependencies = [
     # Starlette parses multipart bodies through this; without it the document
     # upload route raises at import time rather than at request time.
     "python-multipart>=0.0.18",
+    # HTTP client for the optional LLM intent provider (app.services.chatbot.llm);
+    # imported lazily, only when DOCURA_LLM_PROVIDER is configured.
+    "httpx>=0.27",
 ]
 
 [project.optional-dependencies]
