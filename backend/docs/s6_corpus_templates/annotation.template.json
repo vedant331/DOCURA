@@ -1,0 +1,11 @@
+{
+  "document_id": "REPLACE_WITH_ITEM_ID",
+  "expected": [
+    {
+      "text": "REPLACE_WITH_TEXT_EXACTLY_AS_PRINTED_ON_THE_DOCUMENT",
+      "page": 1,
+      "canonical_identifier": "person.full_name",
+      "region": { "x": 0.0, "y": 0.0, "width": 0.0, "height": 0.0 }
+    }
+  ]
+}

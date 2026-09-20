@@ -1,0 +1,26 @@
+{
+  "_comment": "FORMAT EXAMPLE ONLY — not real ground truth, not S-6 evidence. It lives under docs/ and MUST NOT be copied into var/s6_corpus/annotations/. The values are synthetic placeholders (the project's own test data), shown to illustrate the shape and the canonical vocabulary. When you annotate a real document, transcribe the text EXACTLY as printed on that document.",
+  "document_id": "aadhaar_001",
+  "expected": [
+    {
+      "text": "Vedant Santosh Kadam",
+      "page": 1,
+      "canonical_identifier": "person.full_name",
+      "region": { "x": 0.31, "y": 0.22, "width": 0.40, "height": 0.05 }
+    },
+    {
+      "text": "24/03/2007",
+      "page": 1,
+      "canonical_identifier": "person.date_of_birth"
+    },
+    {
+      "text": "1234 5678 9012",
+      "page": 1,
+      "canonical_identifier": "identity.aadhaar_number"
+    },
+    {
+      "text": "Any other machine-printed text on the page may also be listed with no canonical_identifier — S-6 scores OCR text presence, and canonical_identifier is optional per-field metadata.",
+      "page": 1
+    }
+  ]
+}
