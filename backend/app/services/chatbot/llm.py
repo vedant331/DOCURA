@@ -56,6 +56,38 @@ SYSTEM_PROMPT = (
 _VALID_TASKS = {task.value for task in TaskType}
 
 
+def openai_chat_completion(
+    settings: Settings, messages: list[dict[str, str]], *, json_object: bool
+) -> str:
+    """One OpenAI-compatible ``/chat/completions`` call over plain HTTP (no vendor SDK).
+
+    Shared by the intent provider (``json_object=True``) and the response narrator
+    (``json_object=False``) so there is a single, privacy-audited network path. Raises on any
+    transport/HTTP error so the caller can fall back deterministically — it never fabricates.
+    The caller is responsible for what goes into ``messages`` (data minimisation lives there).
+    """
+    import httpx  # lazy: keep the dependency out of import time / the OCR-guard surface
+
+    key = settings.llm_api_key.get_secret_value() if settings.llm_api_key else ""
+    base = settings.llm_base_url.rstrip("/")
+    body: dict[str, object] = {
+        "model": settings.llm_model,
+        "messages": messages,
+        "temperature": 0,
+    }
+    if json_object:
+        body["response_format"] = {"type": "json_object"}
+    with httpx.Client(timeout=settings.llm_timeout_seconds) as client:
+        response = client.post(
+            f"{base}/chat/completions",
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            json=body,
+        )
+        response.raise_for_status()  # 4xx/5xx → raises → caller falls back
+        data = response.json()
+        return str(data["choices"][0]["message"]["content"])
+
+
 def _build_messages(message: str, history: list[str] | None) -> list[dict[str, str]]:
     # Data minimisation: only prior *message text* is ever forwarded, bounded to the last few
     # turns — never the structured record, documents, or any extracted sensitive value.
@@ -148,35 +180,12 @@ class LlmIntentProvider:
 def build_llm_intent_provider(settings: Settings, *, fallback: IntentProvider) -> IntentProvider:
     """Construct the configured LLM intent provider (OpenAI-compatible HTTP). Assumes
     ``settings.llm_configured`` is true. No vendor SDK; the endpoint/base URL is configuration."""
-    key = settings.llm_api_key.get_secret_value() if settings.llm_api_key else ""
-    base = settings.llm_base_url.rstrip("/")
-    model = settings.llm_model
-    timeout = settings.llm_timeout_seconds
-
     def complete(messages: list[dict[str, str]]) -> str:
-        import httpx  # lazy: keep the dependency out of import time / the OCR-guard surface
-
-        with httpx.Client(timeout=timeout) as client:
-            response = client.post(
-                f"{base}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": model,
-                    "messages": messages,
-                    "temperature": 0,
-                    "response_format": {"type": "json_object"},
-                },
-            )
-            response.raise_for_status()  # raises on 4xx/5xx → caught → deterministic fallback
-            data = response.json()
-            return str(data["choices"][0]["message"]["content"])
+        return openai_chat_completion(settings, messages, json_object=True)
 
     return LlmIntentProvider(
         provider_label=settings.llm_provider.value,
-        model=model,
+        model=settings.llm_model,
         complete=complete,
         fallback=fallback,
     )

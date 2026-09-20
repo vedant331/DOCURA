@@ -45,11 +45,13 @@ export function ActivityItem({ action }: { action: FormActionResponse }) {
   const Icon = meta.icon;
   const OutcomeIcon = OUTCOME_ICON[action.outcome];
   return (
-    <li className="flex gap-3 border-b border-border py-4 last:border-b-0">
-      <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center border border-border bg-surface/50 text-muted-foreground">
-        <Icon className="size-4" aria-hidden />
-      </div>
-      <div className="min-w-0 flex-1">
+    <li className="list-none">
+      <div className="activity-card">
+        <div className="activity-card-inner flex gap-3 p-4">
+          <div className="activity-icon mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-bg/50 text-muted-foreground">
+            <Icon className="size-4" aria-hidden />
+          </div>
+          <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-sm font-medium text-foreground">{meta.label}</p>
           <span className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
@@ -69,6 +71,8 @@ export function ActivityItem({ action }: { action: FormActionResponse }) {
             </Link>
           ) : null}
         </div>
+          </div>
+        </div>
       </div>
     </li>
   );
@@ -76,7 +80,7 @@ export function ActivityItem({ action }: { action: FormActionResponse }) {
 
 export function ActivityTimeline({ actions }: { actions: FormActionResponse[] }) {
   return (
-    <ul className="border border-border bg-surface/30 px-4">
+    <ul className="space-y-3">
       {actions.map((a) => (
         <ActivityItem key={a.id} action={a} />
       ))}

@@ -193,6 +193,24 @@ class TestExtractLogic:
         candidates = FullNameFieldExtractor().extract_fields(run)
         assert [c.value for c in candidates] == ["Priya Sharma", "Riya Verma"]
 
+    def test_bare_name_prefix_on_prose_is_not_a_false_extraction(self) -> None:
+        # Precision (BR-009, S-6 false-extraction): a sentence that merely begins with "Name"
+        # but has no ":"/"-" separator must NOT be read as a name. The bare "name" alias
+        # requires an explicit separator; only the explicit "Full Name" label may use whitespace.
+        run = self._run(
+            _result(
+                ("Name mismatches are a silent disqualifier; detecting them is cheap", 0.9),
+                ("named entity recognition is future work", 0.9),
+            )
+        )
+        assert FullNameFieldExtractor().extract_fields(run) == []
+
+    def test_full_name_label_still_matches_with_whitespace_separator(self) -> None:
+        # The legitimate table-row form ("Full Name <value>") is preserved by the fix.
+        run = self._run(_result(("Full Name Vedant Santosh Kadam", 0.9)))
+        candidates = FullNameFieldExtractor().extract_fields(run)
+        assert [c.value for c in candidates] == ["Vedant Santosh Kadam"]
+
     def test_builder_returns_a_usable_extractor(self) -> None:
         run = self._run(_result(("Name: Priya Sharma", 0.9)))
         assert build_field_extractor().extract_fields(run)[0].value == "Priya Sharma"

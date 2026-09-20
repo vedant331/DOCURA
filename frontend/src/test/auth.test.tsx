@@ -111,7 +111,11 @@ describe("Login", () => {
     await user.type(screen.getByLabelText(/sequence key/i), "hunter2hunter2");
     await user.click(screen.getByRole("button", { name: /initialize stream/i }));
 
-    expect(await screen.findByPlaceholderText(/ask docura anything/i)).toBeInTheDocument();
+    // Sign-in now plays the brand greeting ("Docura Says Hello") before navigating, so allow for
+    // that intentional (~2s) transition before /app mounts.
+    expect(
+      await screen.findByPlaceholderText(/ask docura anything/i, undefined, { timeout: 4000 }),
+    ).toBeInTheDocument();
     expect(localStorage.getItem("docura.token")).toBe("test-token");
   });
 });

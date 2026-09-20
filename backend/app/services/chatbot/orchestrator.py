@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import ConversationMessageType
 from app.services.chatbot.intent import Intent, IntentProvider, TaskType, select_intent_provider
+from app.services.chatbot.narrator import ResponseComposer, build_composer
 from app.services.chatbot.readiness import compute_readiness
 from app.services.chatbot.requirements import (
     RequirementsProvider,
@@ -53,29 +54,56 @@ class TaskOrchestrator:
         *,
         intent_provider: IntentProvider,
         requirements_provider: RequirementsProvider,
+        narrator: ResponseComposer,
     ) -> None:
         self._intent = intent_provider
         self._requirements = requirements_provider
+        self._narrator = narrator
 
-    async def handle(self, db: AsyncSession, *, user_id: uuid.UUID, message: str) -> AssistantTurn:
+    async def handle(
+        self,
+        db: AsyncSession,
+        *,
+        user_id: uuid.UUID,
+        message: str,
+        history: list[str] | None = None,
+    ) -> AssistantTurn:
         # classify may do blocking network I/O (LLM provider); keep the event loop free.
-        intent = await asyncio.to_thread(self._intent.classify, message)
+        intent = await asyncio.to_thread(self._intent.classify, message, history=history)
         task = intent.task_type
         if task is TaskType.ASK_REQUIREMENTS:
-            return self._ask_requirements(intent)
-        if task is TaskType.CHECK_DOCUMENTS:
-            return await self._check_documents(db, user_id, intent)
-        if task is TaskType.CHECK_READINESS:
-            return await self._check_readiness(db, user_id, intent)
-        if task is TaskType.FILL_FORM:
-            return self._fill_form(intent)
-        if task is TaskType.DOCUMENT_MATCH:
-            return self._document_match(intent)
-        if task is TaskType.EXPLAIN_BLOCKER:
-            return self._explain_blocker(intent)
-        if task is TaskType.GENERAL_DOCURA_HELP:
-            return self._general_help(intent)
-        return self._unknown(intent)
+            turn = self._ask_requirements(intent)
+        elif task is TaskType.CHECK_DOCUMENTS:
+            turn = await self._check_documents(db, user_id, intent)
+        elif task is TaskType.CHECK_READINESS:
+            turn = await self._check_readiness(db, user_id, intent)
+        elif task is TaskType.FILL_FORM:
+            turn = self._fill_form(intent)
+        elif task is TaskType.DOCUMENT_MATCH:
+            turn = self._document_match(intent)
+        elif task is TaskType.EXPLAIN_BLOCKER:
+            turn = self._explain_blocker(intent)
+        elif task is TaskType.GENERAL_DOCURA_HELP:
+            turn = self._general_help(intent)
+        else:
+            turn = self._unknown(intent)
+        return await self._narrate(turn, message=message, history=history)
+
+    async def _narrate(
+        self, turn: AssistantTurn, *, message: str, history: list[str] | None
+    ) -> AssistantTurn:
+        """Optionally rewrite the reply's TEXT into a grounded natural answer, using only the
+        handler's already-owner-scoped, value-free structured context. Structured ``data`` and
+        ``message_type`` are never changed; on any failure the deterministic message is kept."""
+        composed = await asyncio.to_thread(
+            self._narrator.compose,
+            deterministic_message=turn.message,
+            grounding=turn.data,
+            history=[*(history or []), message],
+        )
+        if composed == turn.message:
+            return turn
+        return AssistantTurn(message=composed, message_type=turn.message_type, data=turn.data)
 
     # ---- handlers ----------------------------------------------------------------------
     def _ask_requirements(self, intent: Intent) -> AssistantTurn:
@@ -109,11 +137,15 @@ class TaskOrchestrator:
     ) -> AssistantTurn:
         docs = await list_documents(db, user_id=user_id)
         listed = [{"filename": d.original_filename, "status": d.status.value} for d in docs]
-        message = (
-            "You haven't uploaded any documents yet."
-            if not docs
-            else f"You have {len(docs)} document{'s' if len(docs) != 1 else ''} in your vault."
-        )
+        if not docs:
+            message = "You haven't uploaded any documents yet."
+        else:
+            # Name the documents so even the deterministic fallback is genuinely informative
+            # (bounded, so a large vault does not produce an unwieldy sentence).
+            names = [d.original_filename for d in docs]
+            shown = ", ".join(names[:10]) + ("…" if len(names) > 10 else "")
+            plural = "s" if len(docs) != 1 else ""
+            message = f"You have {len(docs)} document{plural} in your vault: {shown}."
         return AssistantTurn(
             message=message,
             message_type=ConversationMessageType.DOCUMENT_STATUS,
@@ -238,4 +270,5 @@ def build_orchestrator(settings: Settings) -> TaskOrchestrator:
     return TaskOrchestrator(
         intent_provider=select_intent_provider(settings),
         requirements_provider=build_requirements_provider(settings),
+        narrator=build_composer(settings),
     )

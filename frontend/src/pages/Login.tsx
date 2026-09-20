@@ -6,11 +6,14 @@ import { AuthButton } from "@/components/auth/AuthButton";
 import { AuthError } from "@/components/auth/AuthError";
 import { AuthField } from "@/components/auth/AuthField";
 import { AuthLayout } from "@/components/auth/AuthLayout";
+import { LoginGreeting } from "@/components/auth/LoginGreeting";
+import { useGreeting } from "@/components/auth/greeting-context";
 import { ApiError } from "@/lib/api";
 import { isEmail, required } from "@/lib/validation";
 
 export default function Login() {
   const { signIn } = useAuth();
+  const greeting = useGreeting();
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: Location } | null)?.from?.pathname ?? "/app";
@@ -37,7 +40,9 @@ export default function Login() {
     setSubmitting(true);
     try {
       await signIn(email.trim(), password);
-      navigate(from, { replace: true });
+      // Authentication succeeded — play the greeting (PublicRoute defers its redirect while it
+      // plays); it navigates to `from` when it completes. We do NOT navigate immediately here.
+      greeting.play();
     } catch (err) {
       // Invalid credentials (401) and backend/transport errors both land here; the
       // backend's `detail` is already human-readable and safe to show.
@@ -54,7 +59,9 @@ export default function Login() {
   };
 
   return (
+    <>
     <AuthLayout
+      dimmed={greeting.playing}
       systemId="System Node · Sign In"
       title={
         <>
@@ -104,5 +111,14 @@ export default function Login() {
         </AuthButton>
       </form>
     </AuthLayout>
+    {greeting.playing ? (
+      <LoginGreeting
+        onDone={() => {
+          greeting.stop();
+          navigate(from, { replace: true });
+        }}
+      />
+    ) : null}
+    </>
   );
 }

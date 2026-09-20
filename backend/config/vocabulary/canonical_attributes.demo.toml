@@ -7,14 +7,21 @@
 # fields. The production/released vocabulary remains
 # `canonical_attributes.v0.2-draft.toml` (two authored, non-releasable attributes).
 #
-# Nothing here asserts governance approval. These attributes are NOT G-13-released,
-# their sensitivity tiers here are DEMO defaults (not the A-5/G-14 user-set tiers),
-# and this file is loaded ONLY when DOCURA_DEMO_MODE=true (dev/evaluation opt-in).
-# See backend/docs/DEMO_DYNAMIC_AUTOFILL.md.
+# These attributes are NOT G-13-released. This file is loaded ONLY when DOCURA_DEMO_MODE=true
+# (dev/evaluation opt-in). See backend/docs/DEMO_DYNAMIC_AUTOFILL.md.
 #
-# `normalisation_rule`: N-TEXT (fold case/whitespace), N-DATE (ISO date), or
-#   "verbatim" (store trimmed as read). `sensitivity`: "routine" or "sensitive"
-#   (DEMO default — sensitive fields require explicit per-disclosure approval).
+# `sensitivity` NOW REFLECTS THE OWNER-APPROVED D-A5 POLICY (see
+# backend/docs/SENSITIVITY_GOVERNANCE_DECISION.md — D-A5 RESOLVED). It is the single config
+# record of the tier assignment; the extension runtime mirrors it in extension/src/demo.js
+# (DEMO_TIERS), the same convention the alias lists already follow. Tiers:
+#   routine       — may auto-fill under the existing safety rules (BR-001 threshold still TBD);
+#   sensitive     — per-instance approval + masking (BR-005 / FR-SENS-002/004/005);
+#   consequential — strongest existing protection: approval-gated at the immutable floor
+#                   (BR-020 raise-only; never lowered). Declaration/consent CONTROLS remain
+#                   never-accepted (BR-006), handled separately by declaration classification.
+# Any un-tiered attribute defaults to `sensitive` (approved D-A5 default).
+#
+# `normalisation_rule`: N-TEXT (fold case/whitespace), N-DATE (ISO date), or "verbatim".
 # `aliases`: the label synonyms the deterministic extractor/interpreter match
 #   EXACTLY (after normalisation). Data-driven — extend the lists, not the code.
 # =============================================================================
@@ -48,33 +55,33 @@ aliases = ["age", "applicant age"]
 canonical_identifier = "person.email"
 data_type = "text"
 normalisation_rule = "verbatim"
-sensitivity = "routine"
+sensitivity = "sensitive"
 aliases = ["email", "email address", "e mail"]
 
 [[attribute]]
 canonical_identifier = "person.phone"
 data_type = "text"
 normalisation_rule = "verbatim"
-sensitivity = "routine"
+sensitivity = "sensitive"
 aliases = ["phone", "phone number", "mobile", "mobile number", "contact number"]
 
 [[attribute]]
 canonical_identifier = "person.address"
 data_type = "text"
 normalisation_rule = "verbatim"
-sensitivity = "routine"
+sensitivity = "sensitive"
 aliases = ["address", "residential address", "permanent address", "current address"]
 
 [[attribute]]
 canonical_identifier = "identity.pan_number"
 data_type = "text"
 normalisation_rule = "verbatim"
-sensitivity = "sensitive"
+sensitivity = "consequential"
 aliases = ["pan", "pan number", "pan card number", "permanent account number"]
 
 [[attribute]]
 canonical_identifier = "identity.aadhaar_number"
 data_type = "text"
 normalisation_rule = "verbatim"
-sensitivity = "sensitive"
+sensitivity = "consequential"
 aliases = ["aadhaar", "aadhar", "aadhaar number", "aadhaar card number", "uidai number"]

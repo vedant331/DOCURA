@@ -16,15 +16,18 @@ const DialogContent = React.forwardRef<
 >(({ className, children, hideClose, ...props }, ref) => (
   <DialogPrimitive.Portal>
     <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm data-[state=open]:animate-fade-in" />
-    <DialogPrimitive.Content
-      ref={ref}
-      className={cn(
-        "fixed left-1/2 top-1/2 z-50 grid w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4",
-        "border border-border bg-surface-2 p-6 shadow-2xl focus:outline-none data-[state=open]:animate-fade-in",
-        className,
-      )}
-      {...props}
-    >
+    {/* Full-viewport flex centering wrapper: the modal is centered by the overlay, not by a
+        transform, so it stays exactly centered on any screen size, on resize, and on scroll. */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <DialogPrimitive.Content
+        ref={ref}
+        className={cn(
+          "grid w-full max-w-lg gap-4",
+          "border border-border bg-surface-2 p-6 shadow-2xl focus:outline-none data-[state=open]:animate-fade-in",
+          className,
+        )}
+        {...props}
+      >
       {children}
       {!hideClose ? (
         <DialogPrimitive.Close
@@ -34,7 +37,8 @@ const DialogContent = React.forwardRef<
           <X className="size-4" aria-hidden />
         </DialogPrimitive.Close>
       ) : null}
-    </DialogPrimitive.Content>
+      </DialogPrimitive.Content>
+    </div>
   </DialogPrimitive.Portal>
 ));
 DialogContent.displayName = "DialogContent";

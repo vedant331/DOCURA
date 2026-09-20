@@ -4,13 +4,16 @@ import { BrowserRouter } from "react-router-dom";
 
 import App from "@/App";
 import { AuthProvider } from "@/auth/AuthContext";
+import { GreetingProvider } from "@/components/auth/greeting-context";
 import "@/index.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        <App />
+        <GreetingProvider>
+          <App />
+        </GreetingProvider>
       </AuthProvider>
     </BrowserRouter>
   </StrictMode>,

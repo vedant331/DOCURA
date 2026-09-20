@@ -5,7 +5,8 @@ import { Command, LogOut } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
 import { NAV_ITEMS } from "@/components/app/nav-items";
 import { SlideTabs, type SlideTabItem } from "@/components/ui/slide-tabs";
-import { CustomScrollIndicator } from "@/components/system/CustomScrollIndicator";
+import { ScrollProgress } from "@/components/system/ScrollProgress";
+import { TextReveal } from "@/components/ui/cascade-text";
 
 // The authenticated application shell. The navigation is the SlideTabs bar wired to DOCURA's REAL
 // routes + active-route detection; the top bar also carries the brand mark and sign-out. The
@@ -31,6 +32,10 @@ export function AppShell() {
 
   const activeId = activeIdForPath(pathname);
   const isChat = pathname === "/app" || pathname === "/app/";
+  // The page background applies ONLY to the five authenticated nav destinations (exact route
+  // match). Sub-routes (document detail, form sessions) and, by construction, all auth screens
+  // and the greeting keep their existing backgrounds — this is never a global body rule.
+  const showBackground = NAV_ITEMS.some((item) => item.to === pathname || `${item.to}/` === pathname);
   const initial = (user?.email ?? "").charAt(0).toUpperCase();
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -41,14 +46,29 @@ export function AppShell() {
 
   return (
     <div className="flex h-screen w-full flex-col bg-bg text-foreground">
+      {/* The only visible scroll cue: a route-aware lime progress line pinned to the viewport top. */}
+      <ScrollProgress targetRef={scrollRef} routeKey={pathname} />
       <header className="flex items-center justify-between gap-3 border-b border-border bg-shell px-4 py-2.5 sm:px-6">
         {/* Brand mark */}
         <div className="flex shrink-0 items-center gap-2">
           <div className="flex size-6 items-center justify-center rounded-md bg-accent">
             <Command className="size-3.5 text-accent-foreground" aria-hidden />
           </div>
-          <span className="hidden text-sm font-bold tracking-tight text-foreground sm:inline">
-            DOCURA
+          {/* Cascade hover effect on the wordmark only — icon and layout unchanged. The wrapper
+              keeps the existing responsive hidden/sm:inline behaviour; the TextReveal keeps the
+              current size (text-sm 0.875rem), weight (bold) and colour, with no extra padding. */}
+          <span className="hidden sm:inline">
+            <TextReveal
+              as="span"
+              text="DOCURA"
+              fontSize="0.875rem"
+              color="inherit"
+              hoverColor="#B8F35A"
+              staggerDelay={25}
+              duration={250}
+              direction="up"
+              style={{ padding: 0, lineHeight: 1, fontWeight: 700 }}
+            />
           </span>
         </div>
 
@@ -89,24 +109,30 @@ export function AppShell() {
         </div>
       </header>
 
-      <div className="min-h-0 flex-1">
+      <div className="relative min-h-0 flex-1">
+        {/* Route-scoped plain background for the five nav pages only: a static Deep Navy fill.
+            No animation, grid, particles, or gradient — placeholder until a new background lands. */}
+        {showBackground ? (
+          <div className="pointer-events-none absolute inset-0 z-0 bg-[#0A1128]" />
+        ) : null}
+        <div className="relative z-10 h-full">
         {isChat ? (
           // The chat workspace owns the full viewport height (internal scroll + sticky composer).
           <div className="h-full w-full">
             <Outlet />
           </div>
         ) : (
-          // Every other route: scroll within a centred max-width column, with the custom
-          // DOCURA scroll indicator overlaid on the container's right edge.
+          // Every other route: scroll within a centred max-width column. The only scroll cue is
+          // the top lime progress line (ScrollProgress), which tracks this container per route.
           <div className="relative h-full w-full">
             <div ref={scrollRef} className="h-full w-full overflow-y-auto">
               <div className="mx-auto w-full max-w-5xl px-4 py-4 animate-fade-in">
                 <Outlet />
               </div>
             </div>
-            <CustomScrollIndicator targetRef={scrollRef} />
           </div>
         )}
+        </div>
       </div>
     </div>
   );

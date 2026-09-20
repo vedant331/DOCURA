@@ -85,7 +85,7 @@ export default function SettingsPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" onClick={() => setRevoking(true)}>
+            <Button variant="primary" onClick={() => setRevoking(true)}>
               Sign out everywhere
             </Button>
             <Button asChild variant="ghost">
@@ -104,7 +104,7 @@ export default function SettingsPage() {
             <p className="mt-1 text-sm text-muted-foreground">
               Remove individual documents (and anything extracted from them) from your vault.
             </p>
-            <Button asChild variant="outline" className="mt-2">
+            <Button asChild variant="primary" className="mt-2">
               <Link to="/app/documents">Open document vault</Link>
             </Button>
           </div>

@@ -65,12 +65,18 @@ _VOCAB_PATH = (
 _PERSON_FULL_NAME = "person.full_name"
 _PERSON_DATE_OF_BIRTH = "person.date_of_birth"
 
-# A single block of the form "<name label><sep?><value>", e.g. "Name: Priya Sharma",
+# A single block of the form "<name label><sep><value>", e.g. "Name: Priya Sharma",
 # "Full Name - Priya Sharma", or "Full Name Vedant Santosh Kadam" (a table row where the
-# label and value sit on one OCR line, separated only by whitespace). The separator is
-# optional; the value is whatever follows it. Case-insensitive. See FullNameFieldExtractor.
+# label and value sit on one OCR line, separated only by whitespace). Two label branches with
+# DIFFERENT separator strictness, to avoid matching arbitrary prose (BR-009: no guessing, no
+# false extraction — precision matters for the S-6 field-level evaluation):
+#   * the explicit "full name" label may use ":" / "-" OR bare whitespace (the table-row form);
+#   * the weak bare "name" alias REQUIRES an explicit ":" / "-" separator — otherwise any
+#     sentence beginning "Name ..." (e.g. "Name mismatches are a disqualifier") would be read
+#     as a name. Case-insensitive. See FullNameFieldExtractor.
 _FULL_NAME_LINE = re.compile(
-    r"^\s*(?:full\s+name|name)\s*[:\-]?\s+(?P<value>\S.*?)\s*$", re.IGNORECASE
+    r"^\s*(?:full\s+name\s*[:\-]?\s+|name\s*[:\-]\s+)(?P<value>\S.*?)\s*$",
+    re.IGNORECASE,
 )
 
 # A single block of the form "date of birth<sep?><value>", e.g. "Date of Birth: 24 March

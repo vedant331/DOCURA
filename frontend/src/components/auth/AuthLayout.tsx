@@ -1,6 +1,7 @@
 import { type ReactNode } from "react";
 
 import { BlinkingSquares } from "@/components/ui/blinking-squares";
+import { cn } from "@/lib/utils";
 
 // Shared shell for every authentication screen (APP-1 §7). Near-black ground, the
 // atmospheric background, a mono system id, a bold display heading, the form, and an
@@ -13,6 +14,7 @@ export function AuthLayout({
   children,
   footer,
   background,
+  dimmed = false,
 }: {
   systemId: string;
   title: ReactNode;
@@ -22,11 +24,21 @@ export function AuthLayout({
   // The decorative full-viewport background layer behind the card. Defaults to the shared
   // obsidian+lime BlinkingSquares used across every auth screen; a screen may still override.
   background?: ReactNode;
+  // When true, the card gently fades/recedes (used by the post-login greeting so the login UI
+  // transitions out smoothly rather than being removed abruptly). The background stays for
+  // visual continuity. Defaults false, so every other auth screen is unchanged.
+  dimmed?: boolean;
 }) {
   return (
     <div className="relative flex min-h-screen w-full items-center justify-center bg-bg px-5 py-10">
       {background ?? <BlinkingSquares />}
-      <main className="relative z-10 w-full max-w-[440px] animate-fade-in px-2 sm:px-0">
+      <main
+        className={cn(
+          "relative z-10 w-full max-w-[440px] animate-fade-in px-2 transition-all duration-500 ease-out sm:px-0",
+          dimmed && "pointer-events-none scale-[0.98] opacity-0",
+        )}
+        aria-hidden={dimmed || undefined}
+      >
         {/* Obsidian card with a restrained lime hover glow and a traveling top light beam
             (adapted from the login reference's motion — no purple, no glass excess). */}
         <div className="group relative overflow-hidden rounded-md border border-border bg-surface/80 p-6 shadow-2xl shadow-black/40 backdrop-blur-sm transition-shadow duration-500 hover:shadow-accent-glow sm:p-8">

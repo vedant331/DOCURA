@@ -4,15 +4,18 @@ import { MemoryRouter } from "react-router-dom";
 
 import App from "@/App";
 import { AuthProvider } from "@/auth/AuthContext";
+import { GreetingProvider } from "@/components/auth/greeting-context";
 
-// Render the whole routed app at a chosen location, wrapped in the real AuthProvider so
-// route guards and session behaviour are exercised end to end (only the network layer,
-// @/lib/api, is mocked in the tests themselves).
+// Render the whole routed app at a chosen location, wrapped in the real AuthProvider +
+// GreetingProvider so route guards and session behaviour are exercised end to end (only the
+// network layer, @/lib/api, is mocked in the tests themselves).
 export function renderApp(initialEntries: string[] = ["/login"]) {
   return render(
     <MemoryRouter initialEntries={initialEntries}>
       <AuthProvider>
-        <App />
+        <GreetingProvider>
+          <App />
+        </GreetingProvider>
       </AuthProvider>
     </MemoryRouter>,
   );
@@ -22,7 +25,9 @@ export function renderApp(initialEntries: string[] = ["/login"]) {
 export function renderWithProviders(ui: ReactElement, initialEntries: string[] = ["/"]) {
   return render(
     <MemoryRouter initialEntries={initialEntries}>
-      <AuthProvider>{ui}</AuthProvider>
+      <AuthProvider>
+        <GreetingProvider>{ui}</GreetingProvider>
+      </AuthProvider>
     </MemoryRouter>,
   );
 }

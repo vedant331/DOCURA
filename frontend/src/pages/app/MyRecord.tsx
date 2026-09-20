@@ -67,7 +67,7 @@ export default function MyRecordPage() {
         title="Your record"
         description="The structured information DOCURA has assembled from your documents, with its source and confidence. You decide any conflicts — DOCURA never picks for you."
         actions={
-          <Button variant="outline" onClick={exportRecord} loading={exporting} loadingLabel="Exporting">
+          <Button variant="primary" onClick={exportRecord} loading={exporting} loadingLabel="Exporting">
             <Download className="size-4" aria-hidden /> Export
           </Button>
         }

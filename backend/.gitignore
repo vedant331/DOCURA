@@ -12,3 +12,7 @@ __pycache__/
 # The document vault's local storage. Real identity documents land here during
 # development; nothing under it may ever reach version control.
 var/
+
+# Raw personal documents staged for S-6 evaluation intake. Real identity documents
+# (Aadhaar/PAN/marksheets, etc.) land here; they must never reach version control.
+s6_sources/

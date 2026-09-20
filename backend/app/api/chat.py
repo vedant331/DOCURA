@@ -112,6 +112,10 @@ async def send_message(
     conversation = await conversations.get_conversation(
         db, user_id=user.id, conversation_id=conversation_id
     )
+    # Prior turns for multi-turn context (owner-scoped: this conversation belongs to the caller).
+    # Bounded and text-only — never structured data or sensitive values.
+    prior = await conversations.list_messages(db, conversation=conversation, limit=12, offset=0)
+    history = [m.content for m in prior if m.content]
     user_message = await conversations.add_message(
         db,
         conversation=conversation,
@@ -119,7 +123,9 @@ async def send_message(
         content=payload.content,
         message_type=ConversationMessageType.TEXT,
     )
-    turn = await build_orchestrator(settings).handle(db, user_id=user.id, message=payload.content)
+    turn = await build_orchestrator(settings).handle(
+        db, user_id=user.id, message=payload.content, history=history
+    )
     assistant_message = await conversations.add_message(
         db,
         conversation=conversation,
