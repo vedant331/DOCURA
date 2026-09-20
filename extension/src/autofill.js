@@ -130,6 +130,11 @@ function findElement(root, entry) {
   if (entry.name && root.querySelector) {
     return root.querySelector(`[name="${entry.name.replace(/"/g, '\\"')}"]`);
   }
+  // Generic fallback: a control with no stable id/name tagged by an adapter (e.g. Google Forms
+  // visible inputs, whose submit values live on separate hidden inputs). Value-free locator.
+  if (entry.fieldId && root.querySelector) {
+    return root.querySelector(`[data-docura-field="${String(entry.fieldId).replace(/"/g, '\\"')}"]`);
+  }
   return null;
 }
 

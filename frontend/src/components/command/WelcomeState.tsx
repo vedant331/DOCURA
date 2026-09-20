@@ -1,4 +1,4 @@
-import { FileSearch, ClipboardCheck, PenLine, FolderCheck, Sparkles, type LucideIcon } from "lucide-react";
+import { FileSearch, ClipboardCheck, PenLine, FolderCheck, type LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -39,13 +39,6 @@ export const SUGGESTIONS: Suggestion[] = [
   },
 ];
 
-function greeting(now = new Date()): string {
-  const h = now.getHours();
-  if (h < 12) return "Good morning";
-  if (h < 18) return "Good afternoon";
-  return "Good evening";
-}
-
 function SuggestionCard({ s, onSelect }: { s: Suggestion; onSelect: (prompt: string) => void }) {
   return (
     <button
@@ -72,13 +65,7 @@ export function WelcomeState({ onSelect }: { onSelect: (prompt: string) => void 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col items-center px-2 py-10 text-center animate-fade-in">
       <div className="chat-aura pointer-events-none absolute inset-x-0 top-0 h-64" aria-hidden />
-      <span className="mb-5 flex size-12 items-center justify-center rounded-2xl bg-white/[0.06] ring-1 ring-inset ring-white/10">
-        <Sparkles className="size-6 text-foreground/80" aria-hidden />
-      </span>
-      <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-[1.75rem]">
-        {greeting()} <span aria-hidden>👋</span>
-      </h2>
-      <p className="mt-2 text-lg font-medium text-foreground/90">How can DOCURA help you today?</p>
+      <p className="text-lg font-medium text-foreground/90">How can DOCURA help you today?</p>
       <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
         Ask about your documents, forms, applications, or tasks. DOCURA answers using only the
         information you authorize.

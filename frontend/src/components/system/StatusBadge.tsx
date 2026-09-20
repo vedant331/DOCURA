@@ -51,28 +51,37 @@ interface StatusMeta {
   spin?: boolean;
 }
 
+// Tones use the DOCURA semantic tokens: success (green) / warning (amber) / review (violet) /
+// destructive (red) / neutral grey. Meaning never rests on colour alone — every state also
+// carries an icon and a label.
+const SUCCESS = "border-success/40 text-success";
+const WARNING = "border-warning/40 text-warning";
+const REVIEW = "border-review/40 text-review";
+const DANGER = "border-destructive/50 text-destructive";
+const NEUTRAL = "border-muted-foreground/40 text-muted-foreground";
+
 const META: Record<Status, StatusMeta> = {
-  ready: { label: "Ready", icon: CheckCircle2, tone: "border-emerald-500/40 text-emerald-300" },
-  processing: { label: "Processing", icon: Loader2, tone: "border-muted-foreground/40 text-muted-foreground", spin: true },
-  queued: { label: "Queued", icon: Clock, tone: "border-muted-foreground/40 text-muted-foreground" },
-  complete: { label: "Complete", icon: CheckCircle2, tone: "border-emerald-500/40 text-emerald-300" },
-  failed: { label: "Failed", icon: XCircle, tone: "border-destructive/50 text-destructive" },
-  review_required: { label: "Review required", icon: FileWarning, tone: "border-amber-500/40 text-amber-300" },
-  needs_review: { label: "Needs review", icon: FileWarning, tone: "border-amber-500/40 text-amber-300" },
-  action_required: { label: "Action required", icon: UserRoundCog, tone: "border-amber-500/40 text-amber-300" },
-  waiting: { label: "Waiting for you", icon: Clock, tone: "border-amber-500/40 text-amber-300" },
-  ambiguous: { label: "Ambiguous", icon: GitCompareArrows, tone: "border-amber-500/40 text-amber-300" },
-  conflict: { label: "Conflict", icon: GitCompareArrows, tone: "border-orange-500/50 text-orange-300" },
-  missing: { label: "Missing", icon: CircleSlash, tone: "border-muted-foreground/40 text-muted-foreground" },
-  blocked: { label: "Blocked", icon: Ban, tone: "border-destructive/50 text-destructive" },
-  approved: { label: "Approved", icon: ShieldCheck, tone: "border-emerald-500/40 text-emerald-300" },
-  denied: { label: "Denied", icon: ShieldQuestion, tone: "border-destructive/50 text-destructive" },
-  matched: { label: "Matched", icon: Sparkles, tone: "border-emerald-500/40 text-emerald-300" },
-  multiple: { label: "Multiple candidates", icon: GitCompareArrows, tone: "border-amber-500/40 text-amber-300" },
-  preparing: { label: "Preparing", icon: Loader2, tone: "border-muted-foreground/40 text-muted-foreground", spin: true },
-  quality_loss: { label: "Quality loss", icon: AlertTriangle, tone: "border-orange-500/50 text-orange-300" },
-  declaration: { label: "Declaration — your action", icon: UserRoundCog, tone: "border-amber-500/40 text-amber-300" },
-  unknown: { label: "Unknown", icon: CircleHelp, tone: "border-muted-foreground/40 text-muted-foreground" },
+  ready: { label: "Ready", icon: CheckCircle2, tone: SUCCESS },
+  processing: { label: "Processing", icon: Loader2, tone: NEUTRAL, spin: true },
+  queued: { label: "Queued", icon: Clock, tone: NEUTRAL },
+  complete: { label: "Complete", icon: CheckCircle2, tone: SUCCESS },
+  failed: { label: "Failed", icon: XCircle, tone: DANGER },
+  review_required: { label: "Review required", icon: FileWarning, tone: REVIEW },
+  needs_review: { label: "Needs review", icon: FileWarning, tone: REVIEW },
+  action_required: { label: "Action required", icon: UserRoundCog, tone: WARNING },
+  waiting: { label: "Waiting for you", icon: Clock, tone: WARNING },
+  ambiguous: { label: "Ambiguous", icon: GitCompareArrows, tone: REVIEW },
+  conflict: { label: "Conflict", icon: GitCompareArrows, tone: REVIEW },
+  missing: { label: "Missing", icon: CircleSlash, tone: DANGER },
+  blocked: { label: "Blocked", icon: Ban, tone: DANGER },
+  approved: { label: "Approved", icon: ShieldCheck, tone: SUCCESS },
+  denied: { label: "Denied", icon: ShieldQuestion, tone: DANGER },
+  matched: { label: "Matched", icon: Sparkles, tone: SUCCESS },
+  multiple: { label: "Multiple candidates", icon: GitCompareArrows, tone: REVIEW },
+  preparing: { label: "Preparing", icon: Loader2, tone: NEUTRAL, spin: true },
+  quality_loss: { label: "Quality loss", icon: AlertTriangle, tone: WARNING },
+  declaration: { label: "Declaration — your action", icon: UserRoundCog, tone: WARNING },
+  unknown: { label: "Unknown", icon: CircleHelp, tone: NEUTRAL },
 };
 
 export function StatusBadge({

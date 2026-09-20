@@ -98,9 +98,9 @@ export function ChatComposer({
             aria-label="Send message"
             className={cn(
               "flex size-9 items-center justify-center rounded-xl transition-all duration-200",
-              "bg-white text-black shadow-md shadow-black/30",
-              "hover:bg-white/90 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40",
-              "disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-muted-foreground disabled:shadow-none",
+              "bg-accent text-accent-foreground shadow-md shadow-black/30",
+              "hover:bg-accent-hover active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
+              "disabled:cursor-not-allowed disabled:bg-accent/15 disabled:text-muted-foreground disabled:shadow-none",
             )}
           >
             {loading ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <ArrowUp className="size-4" aria-hidden />}

@@ -12,8 +12,8 @@ export function StatusIndicator({
   className?: string;
 }) {
   const dot = {
-    ok: "bg-emerald-400 [box-shadow:0_0_8px_rgb(52_211_153)]",
-    warn: "bg-amber-400 [box-shadow:0_0_8px_rgb(251_191_36)]",
+    ok: "bg-success [box-shadow:0_0_8px_hsl(var(--success))]",
+    warn: "bg-warning [box-shadow:0_0_8px_hsl(var(--warning))]",
     error: "bg-destructive [box-shadow:0_0_8px_hsl(var(--destructive))]",
     neutral: "bg-mercury [box-shadow:0_0_8px_hsl(var(--mercury))]",
   }[tone];

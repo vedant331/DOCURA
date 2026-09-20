@@ -32,12 +32,12 @@ export const AuthField = forwardRef<HTMLInputElement, AuthFieldProps>(
             className={className}
             {...props}
           />
-          {/* Metallic focus glow — matches the Mercury reference's .input-glow. */}
+          {/* Restrained lime focus underline (no giant glow). */}
           <span
             aria-hidden
             className={cn(
-              "pointer-events-none absolute bottom-0 left-0 h-0.5 w-0 bg-mercury transition-all duration-500",
-              "[box-shadow:0_0_15px_hsl(var(--mercury))] group-focus-within:w-full",
+              "pointer-events-none absolute bottom-0 left-0 h-0.5 w-0 bg-accent transition-all duration-500",
+              "[box-shadow:0_0_10px_hsl(var(--accent)/0.5)] group-focus-within:w-full",
             )}
           />
         </div>

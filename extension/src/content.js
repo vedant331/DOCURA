@@ -47,6 +47,7 @@
     import(chrome.runtime.getURL("src/autofill.js")),
     import(chrome.runtime.getURL("src/mapping.js")),
     import(chrome.runtime.getURL("src/demo.js")),
+    import(chrome.runtime.getURL("src/googleFormsAdapter.js")),
   ])
     .then(
       ([
@@ -72,14 +73,22 @@
           demoClassifyTier,
           demoClassifyDeclaration,
         },
+        { GOOGLE_FORMS_MODE, isGoogleFormsHost, scanGoogleForm },
       ]) => {
-        // DEMO opt-in: when on, the SAME pipeline uses the dynamic demo seams (label-driven
-        // interpretation over common attributes). Off by default → production is unchanged.
-        const fillSeams = DEMO_MODE
+        // Google Forms PROTOTYPE: active ONLY when the flag is on AND we are on a Google Forms
+        // page (both gates). It supplies a DOM scan adapter; the fill logic is the SAME dynamic
+        // (label-driven) seams the demo uses, because Google Form fields resolve by their clean
+        // question label, not by a controlled-form id.
+        const googleFormsActive = GOOGLE_FORMS_MODE && isGoogleFormsHost();
+
+        // DEMO/Google-Forms opt-in: when on, the SAME pipeline uses the dynamic seams (label-driven
+        // interpretation over common attributes). Off → production controlled-form path unchanged.
+        const dynamic = DEMO_MODE || googleFormsActive;
+        const fillSeams = dynamic
           ? { resolveField: demoResolveField, fieldAutomation: demoFieldAutomation, isEligibleForm: isDemoForm }
           : {};
-        const resolveFieldActive = DEMO_MODE ? demoResolveField : resolveField;
-        const reviewSeams = DEMO_MODE
+        const resolveFieldActive = dynamic ? demoResolveField : resolveField;
+        const reviewSeams = dynamic
           ? { classifyTier: demoClassifyTier, classifyDeclaration: demoClassifyDeclaration }
           : {};
         if (globalThis.__docuraWatcher) return;
@@ -154,6 +163,10 @@
           root: document,
           // Latest snapshot only; stale enumerations are never retained (FR-FRM-007).
           onChange: recompute,
+          // Google Forms uses a non-standard DOM (choice controls are divs, inputs lack stable
+          // ids/names, labels are noisy aria strings), so on a Google Forms page we swap in the
+          // adapter's scan. It reuses this same watcher/observer — no second observer.
+          scan: googleFormsActive ? scanGoogleForm : undefined,
         }).start();
         globalThis.__docuraWatcher = watcher;
 

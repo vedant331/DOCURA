@@ -1,4 +1,4 @@
-import { MercuryBackground } from "@/components/auth/MercuryBackground";
+import { BlinkingSquares } from "@/components/ui/blinking-squares";
 
 // Full-screen loading state in the DOCURA language (APP-1 §10). Shown while the auth
 // session is being revalidated on first load, so guards never flash the login screen at
@@ -10,7 +10,7 @@ export function AuthLoadingState({ label = "Establishing secure session" }: { la
       aria-live="polite"
       className="relative flex min-h-screen w-full items-center justify-center bg-bg"
     >
-      <MercuryBackground density="sparse" />
+      <BlinkingSquares />
       <div className="relative z-10 flex flex-col items-center gap-4">
         <span className="label-system">DOCURA</span>
         <div className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">

@@ -103,31 +103,18 @@ beforeEach(() => {
 });
 
 describe("Command center — AI chat workspace (§5)", () => {
-  it("shows the welcome + composer, and the empty document-status card", async () => {
+  it("shows the welcome + composer + New chat, with the old status strip removed", async () => {
     renderApp(["/app"]);
-    // The chat is the primary surface (composer always present).
+    // The chat is the primary surface (composer always present) with the welcome state.
     expect(await screen.findByPlaceholderText(/ask docura anything/i)).toBeInTheDocument();
     expect(screen.getByText(/how can docura help/i)).toBeInTheDocument();
-    // Top-right status card, empty state (async — resolves after the documents fetch).
-    expect((await screen.findAllByText(/no documents uploaded/i)).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("link", { name: /upload documents/i }).length).toBeGreaterThan(0);
-  });
-
-  it("shows the ready document-status card with a real count when documents exist", async () => {
-    m.listDocuments.mockResolvedValue({ documents: [doc(), doc({ id: "doc2" })], count: 2 });
-    renderApp(["/app"]);
-    expect(await screen.findByPlaceholderText(/ask docura anything/i)).toBeInTheDocument();
-    expect((await screen.findAllByText(/documents ready/i)).length).toBeGreaterThan(0);
-    // The count comes from real API data, not fabricated.
-    expect(screen.getAllByText(/2 documents available/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("link", { name: /view documents/i }).length).toBeGreaterThan(0);
-  });
-
-  it("reflects a processing document in the real count (detail lives on the Documents page)", async () => {
-    m.listDocuments.mockResolvedValue({ documents: [doc({ status: "processing" })], count: 1 });
-    renderApp(["/app"]);
-    expect(await screen.findByPlaceholderText(/ask docura anything/i)).toBeInTheDocument();
-    expect((await screen.findAllByText(/1 document available/i)).length).toBeGreaterThan(0);
+    // New chat is preserved.
+    expect(screen.getByRole("button", { name: /new chat/i })).toBeInTheDocument();
+    // The removed header/status strip and document-status card are gone from this area.
+    expect(screen.queryByText(/docura ai/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/ready to help/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/documents ready/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/documents? available/i)).not.toBeInTheDocument();
   });
 
   it("creates a conversation on load and sends messages to the backend", async () => {

@@ -107,16 +107,15 @@ describe("Application shell", () => {
     expect(localStorage.getItem("docura.token")).toBeNull();
   });
 
-  // 12. Notch navigation renders (mobile menu trigger + primary destinations as tabs).
-  it("renders the notch navigation and the mobile menu trigger", async () => {
+  // 12. SlideTabs navigation renders the primary destinations as tabs (real DOCURA routes).
+  it("renders the slide-tabs navigation with the primary destinations", async () => {
     signedIn();
     renderApp(["/app"]);
     await screen.findByPlaceholderText(/ask docura anything/i);
 
-    // Compact-island trigger on smaller viewports.
-    expect(screen.getByRole("button", { name: /toggle navigation menu/i })).toBeInTheDocument();
-    // Primary destinations render as notch tabs (real DOCURA routes).
     expect(screen.getAllByRole("tab", { name: /documents/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("tab", { name: /activity/i }).length).toBeGreaterThan(0);
+    // The current route (Overview / index) is the selected tab.
+    expect(screen.getByRole("tab", { name: /overview/i })).toHaveAttribute("aria-selected", "true");
   });
 });

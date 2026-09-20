@@ -32,11 +32,13 @@ function AssistantAvatar() {
 // ---- status chip for requirement rows --------------------------------------------------
 // Colour appears ONLY here, and only to communicate meaning (subtle, never neon). The base UI
 // stays black/white/grey; "unknown" is neutral grey.
+// DOCURA semantic tokens: success (green) / warning (amber) / review (violet) / destructive
+// (red) / neutral. Colour communicates status only; the label + icon carry the meaning too.
 const STATUS: Record<RequirementStatus, { label: string; className: string; Icon: typeof CheckCircle2 }> = {
-  available: { label: "Available", className: "bg-emerald-500/10 text-emerald-400 ring-emerald-500/20", Icon: CheckCircle2 },
-  needs_approval: { label: "Needs approval", className: "bg-amber-500/10 text-amber-400 ring-amber-500/20", Icon: ShieldCheck },
-  needs_review: { label: "Needs review", className: "bg-orange-500/10 text-orange-400 ring-orange-500/20", Icon: HelpCircle },
-  missing: { label: "Missing", className: "bg-red-500/10 text-red-400 ring-red-500/20", Icon: CircleDashed },
+  available: { label: "Available", className: "bg-success/10 text-success ring-success/20", Icon: CheckCircle2 },
+  needs_approval: { label: "Needs approval", className: "bg-warning/10 text-warning ring-warning/20", Icon: ShieldCheck },
+  needs_review: { label: "Needs review", className: "bg-review/10 text-review ring-review/20", Icon: HelpCircle },
+  missing: { label: "Missing", className: "bg-destructive/10 text-destructive ring-destructive/20", Icon: CircleDashed },
   unknown: { label: "Unknown", className: "bg-white/5 text-muted-foreground ring-white/10", Icon: HelpCircle },
 };
 

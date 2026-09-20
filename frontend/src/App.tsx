@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "@/components/app/AppShell";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { PublicRoute } from "@/components/PublicRoute";
+import { ClickSpark } from "@/components/ui/click-spark";
 import ForgotPassword from "@/pages/ForgotPassword";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
@@ -24,6 +25,9 @@ import ApprovalPage from "@/pages/app/forms/Approval";
 // fall back to the shell, which the guard bounces to /login if unauthenticated.
 export default function App() {
   return (
+    <>
+      {/* One global spark overlay for the whole app — DOCURA lime, subtle, pointer-safe. */}
+      <ClickSpark sparkColor="#B8F35A" sparkSize={6} sparkRadius={12} sparkCount={6} duration={300} easing="ease-out" extraScale={0.85} />
     <Routes>
       <Route element={<PublicRoute />}>
         <Route path="/login" element={<Login />} />
@@ -56,5 +60,6 @@ export default function App() {
       <Route path="/" element={<Navigate to="/app" replace />} />
       <Route path="*" element={<Navigate to="/app" replace />} />
     </Routes>
+    </>
   );
 }

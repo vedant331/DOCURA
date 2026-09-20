@@ -12,9 +12,9 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        // High-contrast metallic primary action.
+        // Lime primary action; hover transitions smoothly to a darker lime (no jump/resize).
         primary:
-          "bg-primary text-primary-foreground hover:tracking-[0.3em] hover:brightness-110 active:brightness-95",
+          "bg-primary text-primary-foreground hover:bg-primary-hover active:brightness-95",
         outline:
           "border border-border bg-transparent text-foreground hover:border-mercury/40 hover:bg-surface",
         ghost: "bg-transparent text-muted-foreground hover:text-foreground hover:bg-surface",

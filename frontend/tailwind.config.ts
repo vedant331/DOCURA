@@ -17,9 +17,11 @@ const config: Config = {
         bg: "hsl(var(--bg))",
         // `background`/`foreground` aliases so the copied shadcn-style notch component resolves.
         background: "hsl(var(--bg))",
+        shell: "hsl(var(--shell))",
         surface: "hsl(var(--surface))",
         "surface-2": "hsl(var(--surface-2))",
         border: "hsl(var(--border))",
+        "border-soft": "hsl(var(--border-soft))",
         input: "hsl(var(--border))",
         ring: "hsl(var(--ring))",
         foreground: "hsl(var(--foreground))",
@@ -30,13 +32,29 @@ const config: Config = {
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
+          hover: "hsl(var(--primary-hover))",
         },
+        // DOCURA brand accent (lime). Restrained — primary actions, focus, small highlights.
+        accent: {
+          DEFAULT: "hsl(var(--accent))",
+          foreground: "hsl(var(--accent-foreground))",
+          hover: "hsl(var(--accent-hover))",
+        },
+        "accent-soft": "hsl(var(--accent-soft))",
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
         },
+        // Semantic status hues — meaning, never decoration.
+        success: "hsl(var(--success))",
+        warning: "hsl(var(--warning))",
+        review: "hsl(var(--review))",
         elevated: "hsl(var(--elevated))",
         "elevated-2": "hsl(var(--elevated-2))",
+      },
+      boxShadow: {
+        // Very small lime glow for important brand/interactive states only.
+        "accent-glow": "0 0 20px -6px hsl(var(--accent) / 0.4)",
       },
       fontFamily: {
         sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],

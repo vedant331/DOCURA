@@ -200,9 +200,13 @@ export function scanForms(root) {
 // The MutationObserver factory is injected so this is unit-testable without a
 // browser: pass a fake that hands back the callback to fire on demand.
 export class FormWatcher {
-  constructor({ root, onChange, observerFactory } = {}) {
+  constructor({ root, onChange, observerFactory, scan } = {}) {
     this.root = root;
     this.onChange = onChange;
+    // The scan function is injectable so a page adapter (e.g. Google Forms) can supply the same
+    // { forms, formCount } shape from a non-standard DOM. Defaults to the native scanForms, so
+    // the controlled/demo production path is unchanged.
+    this.scan = scan ?? scanForms;
     this.factory = observerFactory ?? ((cb) => new MutationObserver(cb));
     this.observer = null;
     this.stopped = false;
@@ -229,7 +233,7 @@ export class FormWatcher {
 
   rescan(reason) {
     if (this.stopped) return null; // a stopped session processes no further mutations
-    this.latest = scanForms(this.root);
+    this.latest = this.scan(this.root);
     if (this.onChange) this.onChange(this.latest, reason);
     return this.latest;
   }

@@ -157,10 +157,64 @@ async def _current_observations(
     return list(result)
 
 
+def _provenance_key(
+    canonical_identifier: str, observation: AttributeObservation
+) -> tuple[uuid.UUID | None, int | None, str, str]:
+    """The stable identity of an observation for *exact-duplicate* collapsing.
+
+    An observation is the SAME reading of the SAME value from the SAME place when it shares
+    all of: the document and page it was read from, the canonical attribute, and the value in
+    the attribute's approved comparison form (:func:`_comparison_form`). The block/region is
+    deliberately **excluded** — the same value read twice on one page is one candidate, not two
+    (the false-duplicate case). Document and page identity is what keeps legitimately separate
+    observations (same value on another page or from another document) distinct.
+    """
+    block = observation.source_block
+    page = getattr(block, "page", None)
+    run = getattr(page, "run", None)
+    document_id = getattr(run, "document_id", None)
+    page_number = getattr(page, "number", None)
+    return (
+        document_id,
+        page_number,
+        canonical_identifier,
+        _comparison_form(canonical_identifier, observation.value),
+    )
+
+
+def _dedupe_exact_duplicates(
+    canonical_identifier: str, observations: list[AttributeObservation]
+) -> list[AttributeObservation]:
+    """Collapse exact-duplicate observations to their first occurrence, order preserved.
+
+    The **only** automatic action taken here: two observations that share the same document,
+    page, attribute, and normalised value are one candidate — so a single document reporting a
+    value twice does not masquerade as multiple competing values, and the supporting source is
+    shown once. Values that differ under the attribute's approved normalisation are **never**
+    collapsed — even on the same page — so a genuine conflict (G-20) is neither hidden nor
+    resolved; that decision still belongs entirely to the caller's ambiguity check below.
+    """
+    seen: set[tuple[uuid.UUID | None, int | None, str, str]] = set()
+    unique: list[AttributeObservation] = []
+    for observation in observations:
+        key = _provenance_key(canonical_identifier, observation)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(observation)
+    return unique
+
+
 def _resolve(
     canonical_identifier: str, observations: list[AttributeObservation]
 ) -> CurrentAttributeValue:
-    """Fold agreeing observations into one value; expose disagreement as ambiguity."""
+    """Fold agreeing observations into one value; expose disagreement as ambiguity.
+
+    Exact-duplicate observations (same document/page/attribute/normalised value) are collapsed
+    first so a value read twice from one document is one candidate, not a false conflict; the
+    ambiguity rule then sees only genuinely distinct values (G-20 unchanged).
+    """
+    observations = _dedupe_exact_duplicates(canonical_identifier, observations)
     distinct = {_comparison_form(canonical_identifier, o.value) for o in observations}
     ambiguous = len(distinct) > 1
     return CurrentAttributeValue(
