@@ -144,6 +144,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     return app
 
 
+# Top-level instance for ASGI servers (e.g. Vercel) that import ``app.main:app``.
+app = create_app()
+
+
 def main() -> None:
     """Console entrypoint: load config, fail clearly, otherwise serve."""
     import uvicorn

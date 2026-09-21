@@ -45,6 +45,9 @@ dev = [
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
+[tool.vercel]
+entrypoint = "server:app"
+
 [tool.setuptools.packages.find]
 include = ["app*"]
 
