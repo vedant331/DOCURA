@@ -172,6 +172,15 @@ class Settings(BaseSettings):
     # working directory, so no machine-specific absolute path is baked in; a
     # deployment points this at its own volume via DOCURA_DOCUMENT_STORAGE_ROOT.
     document_storage_root: Path = Path("var/documents")
+    # Production object storage. When both a URL and a service-role key are present,
+    # build_document_storage selects the Supabase backend instead of LocalFileStorage,
+    # so a read-only serverless filesystem (Vercel) is never touched. All three are
+    # backend-only secrets and MUST NOT carry a VITE_ prefix — the service-role key
+    # bypasses row-level security and must never reach the browser. The bucket must be
+    # created (private) in the Supabase project before first upload.
+    supabase_url: str = ""
+    supabase_service_role_key: SecretStr | None = None
+    supabase_storage_bucket: str = "documents"
     # FR-UPL-003 requires the limits be stated in advance, but no approved document
     # fixes a number. Both figures below are assumptions (Sprint 3 ASM-S3-1) chosen
     # to cover the MVP document set — a scanned multi-page marksheet, a photograph,
@@ -277,6 +286,15 @@ class Settings(BaseSettings):
     def expose_error_detail(self) -> bool:
         """Only non-production environments may see internal failure detail."""
         return self.environment is not Environment.PRODUCTION
+
+    @property
+    def supabase_storage_configured(self) -> bool:
+        """True when the Supabase object-storage backend should be used.
+
+        Reveals no secret — only whether both the URL and a key are present. When
+        false, the vault falls back to LocalFileStorage for development and tests.
+        """
+        return bool(self.supabase_url.strip()) and self.supabase_service_role_key is not None
 
     @property
     def llm_configured(self) -> bool:

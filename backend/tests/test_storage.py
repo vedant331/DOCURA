@@ -14,14 +14,19 @@ from __future__ import annotations
 
 import io
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
+
+if TYPE_CHECKING:
+    from app.core.config import Settings
 
 from app.core.errors import DocumentStorageError, UnsupportedDocumentError
 from app.services.document_validation import sanitise_filename
 from app.services.storage import (
     LocalFileStorage,
     StorageKeyError,
+    SupabaseStorage,
     build_document_storage,
     generate_storage_key,
     stream_object,
@@ -168,6 +173,121 @@ class TestLocalFileStorage:
 
         assert b"".join(stream_object(handle, chunk_size=2)) == b"abcdef"
         assert handle.closed
+
+
+class TestBackendSelection:
+    """build_document_storage picks the backend from configuration alone."""
+
+    def _settings(self, **overrides: object) -> Settings:
+        from app.core.config import Environment, Settings
+
+        base: dict[str, object] = {
+            "environment": Environment.PRODUCTION,
+            "database_url": "postgresql://u:p@localhost:5432/d",
+        }
+        base.update(overrides)
+        return Settings(**base)  # type: ignore[arg-type]
+
+    def test_production_config_selects_supabase(self) -> None:
+        settings = self._settings(
+            supabase_url="https://proj.supabase.co",
+            supabase_service_role_key="service-role-secret",
+        )
+        assert settings.supabase_storage_configured is True
+        assert isinstance(build_document_storage(settings), SupabaseStorage)
+
+    def test_local_config_selects_local_file_storage(self, tmp_path: Path) -> None:
+        from app.core.config import Environment, Settings
+
+        settings = Settings(
+            environment=Environment.LOCAL,
+            database_url="postgresql://u:p@localhost:5432/d",
+            document_storage_root=tmp_path / "vault",
+        )
+        assert settings.supabase_storage_configured is False
+        assert isinstance(build_document_storage(settings), LocalFileStorage)
+
+    def test_url_without_key_stays_local(self, tmp_path: Path) -> None:
+        settings = self._settings(
+            document_storage_root=tmp_path / "vault",
+            supabase_url="https://proj.supabase.co",
+        )
+        assert isinstance(build_document_storage(settings), LocalFileStorage)
+
+
+class TestSupabaseStorage:
+    """The REST request logic, driven against an in-memory bucket."""
+
+    def _storage(self) -> SupabaseStorage:
+        import httpx
+
+        bucket: dict[str, bytes] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            # Path shape: /storage/v1/object[/info]/{bucket}/{key...}
+            parts = request.url.path.split("/storage/v1/object", 1)[1].lstrip("/")
+            if parts.startswith("info/"):
+                key = parts.split("/", 2)[2]
+                return httpx.Response(200 if key in bucket else 404)
+            key = parts.split("/", 1)[1]
+            if request.method == "POST":
+                bucket[key] = request.content
+                return httpx.Response(200, json={"Key": key})
+            if request.method == "GET":
+                if key not in bucket:
+                    return httpx.Response(404, json={"error": "not found"})
+                return httpx.Response(200, content=bucket[key])
+            if request.method == "DELETE":
+                removed = [{"name": key}] if bucket.pop(key, None) is not None else []
+                return httpx.Response(200, json=removed)
+            return httpx.Response(405)  # pragma: no cover
+
+        storage = SupabaseStorage(
+            base_url="https://proj.supabase.co",
+            service_key="service-role-secret",
+            bucket="documents",
+        )
+        storage._client = httpx.Client(
+            base_url="https://proj.supabase.co/storage/v1",
+            transport=httpx.MockTransport(handler),
+        )
+        return storage
+
+    def test_save_then_open_returns_the_same_bytes(self) -> None:
+        storage = self._storage()
+        key = generate_storage_key()
+        payload = b"%PDF-1.7 the original, unmodified"
+
+        assert storage.save(key, io.BytesIO(payload)) == len(payload)
+        with storage.open(key) as handle:
+            assert handle.read() == payload
+
+    def test_open_on_a_missing_object_is_a_storage_error(self) -> None:
+        with pytest.raises(DocumentStorageError):
+            self._storage().open(generate_storage_key())
+
+    def test_delete_is_idempotent(self) -> None:
+        storage = self._storage()
+        key = generate_storage_key()
+        storage.save(key, io.BytesIO(b"payload"))
+
+        assert storage.delete(key) is True
+        assert storage.delete(key) is False
+        assert storage.exists(key) is False
+
+    def test_exists_tracks_the_stored_object(self) -> None:
+        storage = self._storage()
+        key = generate_storage_key()
+        assert storage.exists(key) is False
+        storage.save(key, io.BytesIO(b"x"))
+        assert storage.exists(key) is True
+
+    @pytest.mark.parametrize("key", ["../../etc/passwd", "ab/cd/" + "g" * 32, ""])
+    def test_a_malformed_key_never_reaches_the_api(self, key: str) -> None:
+        storage = self._storage()
+        with pytest.raises(StorageKeyError):
+            storage.save(key, io.BytesIO(b"payload"))
+        assert storage.exists(key) is False
 
 
 class TestFilenameSanitisation:
