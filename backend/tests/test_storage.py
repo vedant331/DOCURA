@@ -214,6 +214,34 @@ class TestBackendSelection:
         )
         assert isinstance(build_document_storage(settings), LocalFileStorage)
 
+    def test_blank_service_role_key_is_unconfigured(self, tmp_path: Path) -> None:
+        # A present-but-empty env var (e.g. DOCURA_SUPABASE_SERVICE_ROLE_KEY set to "")
+        # must not count as configured — otherwise a broken empty-token client is built.
+        settings = self._settings(
+            document_storage_root=tmp_path / "vault",
+            supabase_url="https://proj.supabase.co",
+            supabase_service_role_key="   ",
+        )
+        assert settings.supabase_storage_configured is False
+        assert isinstance(build_document_storage(settings), LocalFileStorage)
+
+    def test_supabase_config_never_touches_the_filesystem(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Vercel's filesystem is read-only: selecting the Supabase backend must not
+        # construct LocalFileStorage, whose __init__ calls Path.mkdir on the vault root
+        # (the exact call that raised OSError: [Errno 30] Read-only file system in prod).
+        def _forbidden_mkdir(*_args: object, **_kwargs: object) -> None:
+            raise AssertionError("build_document_storage touched the filesystem")
+
+        monkeypatch.setattr(Path, "mkdir", _forbidden_mkdir)
+        settings = self._settings(
+            supabase_url="https://proj.supabase.co",
+            supabase_service_role_key="service-role-secret",
+        )
+        storage = build_document_storage(settings)
+        assert isinstance(storage, SupabaseStorage)
+
 
 class TestSupabaseStorage:
     """The REST request logic, driven against an in-memory bucket."""

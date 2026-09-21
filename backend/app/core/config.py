@@ -293,8 +293,18 @@ class Settings(BaseSettings):
 
         Reveals no secret — only whether both the URL and a key are present. When
         false, the vault falls back to LocalFileStorage for development and tests.
+
+        A present-but-blank key is treated as *unconfigured*: Vercel (and any env
+        source) can hold a variable whose value is empty or whitespace, and building
+        SupabaseStorage with an empty service-role key would only fail later, on the
+        first request, as an opaque 401 instead of here as a clear selection outcome.
         """
-        return bool(self.supabase_url.strip()) and self.supabase_service_role_key is not None
+        key = self.supabase_service_role_key
+        return (
+            bool(self.supabase_url.strip())
+            and key is not None
+            and bool(key.get_secret_value().strip())
+        )
 
     @property
     def llm_configured(self) -> bool:
