@@ -167,14 +167,15 @@ test("maps the 7 supported labels to their canonical attributes", () => {
   assert.equal(byLabel["Aadhaar Number"].entry.canonicalIdentifier, "identity.aadhaar_number");
 });
 
-// ---- routine fields fill; sensitive fields wait ----------------------------
-test("routine supported fields fill; unknown & declaration untouched", () => {
+// ---- routine fills; sensitive/consequential wait; unknown/declaration untouched ------------
+test("routine fills; sensitive & consequential wait; unknown & declaration untouched", () => {
   const root = testForm();
   const { plan, byLabel } = planFor(root);
+  // Approved D-A5 policy: only full_name is routine here; email/phone/address are sensitive.
   assert.equal(byLabel["Full Name"].entry.action, "fill");
-  assert.equal(byLabel["Email"].entry.action, "fill");
-  assert.equal(byLabel["Phone Number"].entry.action, "fill");
-  assert.equal(byLabel["Address"].entry.action, "fill");
+  assert.equal(byLabel["Email"].entry.action, "approval_required");
+  assert.equal(byLabel["Phone Number"].entry.action, "approval_required");
+  assert.equal(byLabel["Address"].entry.action, "approval_required");
   // 9. unknown question
   assert.equal(byLabel["Favourite Colour"].entry.action, "untouched");
   // 10. declaration/consent checkbox — never automated
@@ -182,7 +183,7 @@ test("routine supported fields fill; unknown & declaration untouched", () => {
 
   const { filled } = applyFillPlan({ plan, root });
   const filledLabels = filled.map((f) => f.canonicalIdentifier).sort();
-  assert.deepEqual(filledLabels, ["person.address", "person.email", "person.full_name", "person.phone"]);
+  assert.deepEqual(filledLabels, ["person.full_name"]); // only routine auto-fills
 });
 
 // ---- 10 (declaration blocked in review too) --------------------------------
@@ -205,8 +206,16 @@ test("PAN/Aadhaar/DOB require explicit approval before filling", () => {
   for (const label of ["Date of Birth", "PAN Number", "Aadhaar Number"]) {
     assert.equal(byLabel[label].entry.action, "approval_required", `${label} must ask first`);
   }
+  // Under the approved policy, email/phone/address are also sensitive → also pending approval.
   const pending = pendingApprovals(plan).map((p) => p.canonicalIdentifier).sort();
-  assert.deepEqual(pending, ["identity.aadhaar_number", "identity.pan_number", "person.date_of_birth"]);
+  assert.deepEqual(pending, [
+    "identity.aadhaar_number",
+    "identity.pan_number",
+    "person.address",
+    "person.date_of_birth",
+    "person.email",
+    "person.phone",
+  ]);
 
   // Approve PAN's exact disclosure, recompute, and it fills; the others still wait.
   const pan = byLabel["PAN Number"].entry;

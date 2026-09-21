@@ -87,44 +87,51 @@ test("meaningful labels resolve; meaningless id/name alone does not", () => {
   assert.equal(demoResolveField({ id: "z77", name: "field_891" }), null);
 });
 
-test("tiers and declaration are classified from meaning, not id", () => {
-  assert.equal(demoClassifyTier({ label: "Applicant Name" }), "routine");
-  assert.equal(demoClassifyTier({ label: "Permanent Account Number" }), "sensitive");
-  assert.equal(demoClassifyTier({ label: "Favourite Colour" }), "unknown");
+test("tiers and declaration are classified from meaning, not id (approved D-A5 policy)", () => {
+  assert.equal(demoClassifyTier({ label: "Applicant Name" }), "routine"); // person.full_name
+  assert.equal(demoClassifyTier({ label: "Age" }), "routine"); // person.age
+  assert.equal(demoClassifyTier({ label: "Email Address" }), "sensitive"); // person.email
+  assert.equal(demoClassifyTier({ label: "Mobile Number" }), "sensitive"); // person.phone
+  assert.equal(demoClassifyTier({ label: "Residential Address" }), "sensitive"); // person.address
+  assert.equal(demoClassifyTier({ label: "Birth Date" }), "sensitive"); // person.date_of_birth
+  assert.equal(demoClassifyTier({ label: "Permanent Account Number" }), "consequential"); // PAN
+  assert.equal(demoClassifyTier({ label: "UIDAI Number" }), "consequential"); // Aadhaar
+  assert.equal(demoClassifyTier({ label: "Favourite Colour" }), "unknown"); // resolves to nothing
   assert.equal(demoClassifyDeclaration({ type: "checkbox", label: "I agree to the terms and conditions" }), true);
   assert.equal(demoClassifyDeclaration({ type: "text", label: "Applicant Name" }), false);
 });
 
-// --- the safety decisions over the realistic form -----------------------------------------
-test("routine fills, sensitive needs approval, unknown/declaration untouched", () => {
+// --- the safety decisions over the realistic form (approved D-A5 policy) --------------------
+test("routine fills; sensitive & consequential need approval; unknown/declaration untouched", () => {
   const plan = computeFillPlan({ snapshot: SNAPSHOT, record: RECORD, context: {}, ...seams });
   const byField = Object.fromEntries(plan.forms[0].fields.map((f) => [f.fieldId, f]));
 
   assert.equal(byField.x71.action, "fill"); // Applicant Name (routine)
   assert.equal(byField.x71.value, "Vedant Santosh Kadam");
-  assert.equal(byField.anything.action, "fill"); // Mobile (routine)
-  assert.equal(byField.randomEmail.action, "fill"); // Email (routine)
-  assert.equal(byField.q9.action, "fill"); // Address (routine)
 
+  assert.equal(byField.anything.action, "approval_required"); // Mobile (sensitive)
+  assert.equal(byField.randomEmail.action, "approval_required"); // Email (sensitive)
+  assert.equal(byField.q9.action, "approval_required"); // Address (sensitive)
   assert.equal(byField.random_22.action, "approval_required"); // Birth Date (sensitive)
-  assert.equal(byField.field_q1.action, "approval_required"); // PAN (sensitive)
-  assert.equal(byField.foo_991.action, "approval_required"); // Aadhaar (sensitive)
+  assert.equal(byField.field_q1.action, "approval_required"); // PAN (consequential)
+  assert.equal(byField.foo_991.action, "approval_required"); // Aadhaar (consequential)
 
   assert.equal(byField.c1.action, "untouched"); // Favourite Colour (unknown)
   assert.equal(byField.decl1.action, "untouched"); // Declaration (never automated)
 });
 
-test("actual DOM: routine values are written, sensitive/unknown/declaration are not", () => {
+test("actual DOM: routine values are written; sensitive/consequential/unknown/declaration are not", () => {
   const plan = computeFillPlan({ snapshot: SNAPSHOT, record: RECORD, context: {}, ...seams });
   const root = fakeRoot(FIELDS);
   const { filled } = applyFillPlan({ plan, root });
 
   assert.equal(root._els.get("x71").value, "Vedant Santosh Kadam"); // routine filled
-  assert.equal(root._els.get("randomEmail").value, "example@gmail.com");
-  assert.equal(root._els.get("field_q1").value, ""); // sensitive PAN NOT filled (no approval)
+  assert.equal(root._els.get("randomEmail").value, ""); // email now sensitive → NOT filled
+  assert.equal(root._els.get("field_q1").value, ""); // consequential PAN NOT filled (no approval)
   assert.equal(root._els.get("c1").value, ""); // unknown untouched
   assert.equal(root._els.get("decl1").value, ""); // declaration untouched
-  assert.ok(filled.every((f) => f.fieldId !== "field_q1" && f.fieldId !== "decl1"));
+  // Only the routine full-name field is auto-filled without approval.
+  assert.deepEqual(filled.map((f) => f.fieldId), ["x71"]);
 });
 
 test("sensitive field fills only AFTER an exact-scope approval", () => {

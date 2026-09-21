@@ -39,13 +39,34 @@ export const DEMO_ALIASES = {
   "identity.aadhaar_number": ["aadhaar", "aadhar", "aadhaar number", "aadhaar card number", "uidai number"],
 };
 
-// DEMO sensitivity tiers (a demo default, NOT the A-5/G-14 user-set assignment). Sensitive
-// attributes disclose ONLY through the per-instance approval gate; routine ones may auto-fill.
-export const DEMO_SENSITIVE = new Set([
-  "person.date_of_birth",
-  "identity.pan_number",
-  "identity.aadhaar_number",
-]);
+// OWNER-APPROVED sensitivity tiers (D-A5 RESOLVED — see
+// backend/docs/SENSITIVITY_GOVERNANCE_DECISION.md). This map is the extension runtime mirror of
+// the single config record in backend/config/vocabulary/canonical_attributes.demo.toml
+// (`sensitivity`), the same convention the alias lists already follow — kept in sync, one map
+// here (no scattered tier rules). Tiers drive the SAME existing safety machinery:
+//   routine       → may auto-fill (BR-001 threshold still TBD);
+//   sensitive     → per-instance approval + masking (BR-005 / FR-SENS-002/004/005);
+//   consequential → strongest existing protection: approval-gated at the immutable floor
+//                   (BR-020 raise-only, never lowered). Declaration/consent CONTROLS remain
+//                   never-accepted (BR-006) via demoClassifyDeclaration, independent of this map.
+export const DEMO_TIERS = {
+  "person.full_name": "routine",
+  "person.date_of_birth": "sensitive",
+  "person.age": "routine",
+  "person.email": "sensitive",
+  "person.phone": "sensitive",
+  "person.address": "sensitive",
+  "identity.pan_number": "consequential",
+  "identity.aadhaar_number": "consequential",
+};
+
+// Approved D-A5 default: an attribute with no explicit tier is treated as SENSITIVE (never
+// silently routine — that could disclose without approval), matching the conservative floor.
+export const DEMO_DEFAULT_TIER = "sensitive";
+
+// Tiers that require per-disclosure approval before any value is placed (BR-005). Consequential
+// is the strongest tier and is likewise approval-gated (and pinned at the BR-020 floor).
+const DEMO_APPROVAL_TIERS = new Set(["sensitive", "consequential"]);
 
 export const DEMO_RELEASED = new Set(Object.keys(DEMO_ALIASES));
 
@@ -102,20 +123,23 @@ export function demoClassifyDeclaration(field) {
   return /\b(i agree|agree|consent|declaration|declare|terms|i confirm)\b/.test(label);
 }
 
-// The demo sensitivity tier of a field: routine/sensitive from its resolved attribute, else
-// "unknown" (computeReview then leaves it untouched — it never guesses a tier).
+// The approved sensitivity tier of a field: routine/sensitive/consequential from its resolved
+// attribute (default SENSITIVE for a resolved-but-untiered attribute, per D-A5), else "unknown"
+// when the field resolves to no attribute (computeReview then leaves it untouched — never guessed).
 export function demoClassifyTier(field) {
   const canonical = demoResolveField(field);
   if (canonical === null) return "unknown";
-  return DEMO_SENSITIVE.has(canonical) ? "sensitive" : "routine";
+  return DEMO_TIERS[canonical] ?? DEMO_DEFAULT_TIER;
 }
 
-// The fill POLICY for autofill.js: routine → "auto", sensitive → "approval", unresolved → null
-// (untouched). A declaration is not a demo attribute, so it resolves to null and is untouched.
+// The fill POLICY for autofill.js: routine → "auto"; sensitive/consequential → "approval"
+// (disclose only after explicit per-instance approval); unresolved → null (untouched). A
+// declaration is not a demo attribute, so it resolves to null and is untouched.
 export function demoFieldAutomation(field) {
   const canonical = demoResolveField(field);
   if (canonical === null) return null;
-  return DEMO_SENSITIVE.has(canonical) ? "approval" : "auto";
+  const tier = DEMO_TIERS[canonical] ?? DEMO_DEFAULT_TIER;
+  return DEMO_APPROVAL_TIERS.has(tier) ? "approval" : "auto";
 }
 
 // Eligibility gate. DEMO_MODE is the explicit opt-in; when it is on, the demo seams apply to the

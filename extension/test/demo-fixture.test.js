@@ -79,13 +79,15 @@ test("detect captures the label, not the opaque id, and is value-free", () => {
 test("routine fields fill; sensitive need approval; unknown/declaration untouched", () => {
   const plan = computeFillPlan({ snapshot: SNAPSHOT, record: RECORD, context: {}, ...seams });
   const by = Object.fromEntries(plan.forms[0].fields.map((f) => [f.fieldId, f]));
+  // Approved D-A5 policy: only full_name/age are routine; email/phone/address/dob are sensitive;
+  // PAN/Aadhaar are consequential — all approval-gated.
   assert.equal(by.x71.action, "fill");            // Applicant Name → routine
-  assert.equal(by.anything.action, "fill");       // Mobile → routine
-  assert.equal(by.randomEmail.action, "fill");    // Email → routine
-  assert.equal(by.q9.action, "fill");             // Residential Address → routine
+  assert.equal(by.anything.action, "approval_required");  // Mobile → sensitive
+  assert.equal(by.randomEmail.action, "approval_required"); // Email → sensitive
+  assert.equal(by.q9.action, "approval_required");        // Residential Address → sensitive
   assert.equal(by.random_22.action, "approval_required"); // Birth Date → sensitive
-  assert.equal(by.field_q1.action, "approval_required");  // PAN → sensitive
-  assert.equal(by.foo_991.action, "approval_required");   // UIDAI → sensitive
+  assert.equal(by.field_q1.action, "approval_required");  // PAN → consequential
+  assert.equal(by.foo_991.action, "approval_required");   // UIDAI → consequential
   assert.equal(by.c1.action, "untouched");        // Favourite Colour → unknown
   assert.equal(by.decl1.action, "untouched");     // Declaration → never automated
 });
@@ -96,10 +98,10 @@ test("actual DOM: routine written, sensitive blank until approval then written",
   const root = fakeRoot(FIELDS);
   applyFillPlan({ plan, root });
   assert.equal(root._els.get("x71").value, "Neha Kulkarni");     // routine filled
-  assert.equal(root._els.get("randomEmail").value, "neha.kulkarni@example.com");
-  assert.equal(root._els.get("anything").value, "9812345670");
-  assert.equal(root._els.get("q9").value, "Bengaluru, Karnataka");
-  assert.equal(root._els.get("field_q1").value, "");            // PAN blank (no approval)
+  assert.equal(root._els.get("randomEmail").value, "");         // Email sensitive → blank (no approval)
+  assert.equal(root._els.get("anything").value, "");            // Mobile sensitive → blank
+  assert.equal(root._els.get("q9").value, "");                  // Address sensitive → blank
+  assert.equal(root._els.get("field_q1").value, "");            // PAN consequential → blank (no approval)
   assert.equal(root._els.get("random_22").value, "");           // DOB blank
   assert.equal(root._els.get("c1").value, "");                  // unknown blank
   assert.equal(root._els.get("decl1").value, "");               // declaration blank
