@@ -25,6 +25,10 @@ interface VideoThumbnailPlayerProps extends React.HTMLAttributes<HTMLDivElement>
   aspectRatio?: "16/9" | "4/3" | "1/1";
 }
 
+// A direct video file (served from /public or elsewhere) plays in a native <video>; anything
+// else (a YouTube/Vimeo embed URL) stays an <iframe>. Query strings/hashes are ignored.
+const isDirectVideoFile = (src: string) => /\.(mp4|webm|ogg)(?:[?#].*)?$/i.test(src.trim());
+
 const VideoThumbnailPlayer = React.forwardRef<HTMLDivElement, VideoThumbnailPlayerProps>(
   (
     { className, videoSrc, poster, title, placeholderLabel = "Explainer · coming soon", aspectRatio = "16/9", ...props },
@@ -124,13 +128,25 @@ const VideoThumbnailPlayer = React.forwardRef<HTMLDivElement, VideoThumbnailPlay
               <X className="size-5" aria-hidden />
             </button>
             <div className="aspect-video w-full max-w-4xl" onClick={(e) => e.stopPropagation()}>
-              <iframe
-                src={videoSrc}
-                title={title}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                className="h-full w-full rounded-md border border-border"
-              />
+              {videoSrc && isDirectVideoFile(videoSrc) ? (
+                <video
+                  src={videoSrc}
+                  title={title}
+                  controls
+                  autoPlay
+                  muted
+                  playsInline
+                  className="h-full w-full rounded-md border border-border"
+                />
+              ) : (
+                <iframe
+                  src={videoSrc}
+                  title={title}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  className="h-full w-full rounded-md border border-border"
+                />
+              )}
             </div>
           </div>
         ) : null}

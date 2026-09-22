@@ -1,0 +1,24 @@
+- main [ref=f3e24]:
+  - generic [ref=f3e25]:
+    - generic [ref=f3e27]:
+      - generic [ref=f3e28]: System Node · New Archive
+      - heading "CREATE IDENTITY" [level=1] [ref=f3e29]: CREATEIDENTITY
+    - form "Create account" [ref=f3e30]:
+      - generic [ref=f3e31]:
+        - generic [ref=f3e32]: Email
+        - textbox "Email" [disabled] [ref=f3e34]:
+          - /placeholder: id@domain
+          - text: docura-e2e-20260922@example.com
+      - generic [ref=f3e35]:
+        - generic [ref=f3e36]: Sequence Key
+        - textbox "Sequence Key" [disabled] [ref=f3e38]:
+          - /placeholder: ••••••••
+          - text: DocuraTest!2026x
+      - generic [ref=f3e39]:
+        - generic [ref=f3e40]: Confirm Sequence Key
+        - textbox "Confirm Sequence Key" [disabled] [ref=f3e42]:
+          - /placeholder: ••••••••
+          - text: DocuraTest!2026x
+      - button "Creating" [disabled]
+    - link "Return to Sign In" [ref=f3e45] [cursor=pointer]:
+      - /url: /login

@@ -1,0 +1,20 @@
+- main [ref=f4e4]:
+  - generic [ref=f4e5]:
+    - generic [ref=f4e7]:
+      - generic [ref=f4e8]: System Node · Sign In
+      - heading "NEURAL ACCESS" [level=1] [ref=f4e9]: NEURALACCESS
+    - form "Sign in" [ref=f4e10]:
+      - generic [ref=f4e11]:
+        - generic [ref=f4e12]: User Identity
+        - textbox "User Identity" [active] [ref=f4e14]:
+          - /placeholder: id@domain
+      - generic [ref=f4e15]:
+        - generic [ref=f4e16]: Sequence Key
+        - textbox "Sequence Key" [ref=f4e18]:
+          - /placeholder: ••••••••
+      - button "Initialize Stream" [ref=f4e19] [cursor=pointer]
+    - generic [ref=f4e20]:
+      - link "Encrypted Recovery" [ref=f4e21] [cursor=pointer]:
+        - /url: /forgot-password
+      - link "New Archive" [ref=f4e22] [cursor=pointer]:
+        - /url: /register

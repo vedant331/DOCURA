@@ -3,23 +3,30 @@ import {
   Activity,
   ArrowRight,
   CheckCircle2,
+  Download,
   Eye,
   FileCheck2,
   FileText,
+  FolderOpen,
   GitBranch,
   ListChecks,
   Lock,
   MessageSquare,
   MousePointerClick,
+  PackageOpen,
   ScanLine,
   ShieldCheck,
   StopCircle,
+  ToggleRight,
   Upload,
   UserSquare,
   type LucideIcon,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { HowItWorks } from "@/components/ui/how-it-works";
+import { HyperText } from "@/components/ui/hyper-text";
+import { Reveal, RevealItem } from "@/components/ui/scroll-reveal";
 import { VideoThumbnailPlayer } from "@/components/ui/video-thumbnail-player";
 
 // -----------------------------------------------------------------------------------------
@@ -36,7 +43,7 @@ import { VideoThumbnailPlayer } from "@/components/ui/video-thumbnail-player";
 // ▼▼▼ REPLACE-ME: set this to your extension explainer video's EMBED url (e.g. a YouTube/Vimeo
 // "embed" URL) when it is ready. While it is an empty string, a clean placeholder renders and
 // nothing is faked. This is the only change needed to ship the real video. ▼▼▼
-const EXTENSION_VIDEO_SRC = "";
+const EXTENSION_VIDEO_SRC = "/videos/docura-extension-demo.mp4";
 
 const CONTENT_WIDTH = "mx-auto w-full max-w-6xl px-4 sm:px-6";
 
@@ -72,7 +79,7 @@ interface Feature {
 
 function FeatureCard({ icon: Icon, title, body }: Feature) {
   return (
-    <div className="group rounded-md border border-border bg-surface/70 p-5 transition-colors hover:border-accent/40 hover:bg-surface">
+    <div className="group h-full rounded-md border border-border bg-surface/70 p-5 transition-colors hover:border-accent/40 hover:bg-surface">
       <span className="flex size-9 items-center justify-center rounded-md border border-border bg-surface-2 text-muted-foreground transition-colors group-hover:border-accent/40 group-hover:text-accent">
         <Icon className="size-4" aria-hidden />
       </span>
@@ -201,6 +208,16 @@ const EXTENSION_POINTS: Feature[] = [
   },
 ];
 
+// The extension is distributed as an unpacked ZIP loaded in Developer Mode (M2/M3), so the
+// install path is: download → extract → enable Developer Mode → load unpacked → use.
+const EXTENSION_INSTALL: { icon: LucideIcon; title: string; body: string }[] = [
+  { icon: Download, title: "Download extension", body: "Download the DOCURA browser extension ZIP." },
+  { icon: FolderOpen, title: "Extract the ZIP", body: "Extract the downloaded ZIP file to a folder on your computer." },
+  { icon: ToggleRight, title: "Enable Developer Mode", body: "Open your browser's Extensions page and enable Developer Mode." },
+  { icon: PackageOpen, title: "Load unpacked", body: 'Click "Load unpacked" and select the extracted DOCURA extension folder.' },
+  { icon: CheckCircle2, title: "Use DOCURA", body: "Open a supported web form and use the DOCURA extension to access relevant information for filling the form." },
+];
+
 const FORM_LIFECYCLE: { icon: LucideIcon; title: string; body: string }[] = [
   { icon: ListChecks, title: "Readiness", body: "What the form needs before it can continue." },
   { icon: GitBranch, title: "Matching", body: "Your details lined up against the form's fields." },
@@ -236,18 +253,32 @@ export default function OverviewPage() {
       <section className="relative overflow-hidden border-b border-border">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_0%,hsl(var(--accent)/0.08),transparent_70%)]" />
         <div className={`${CONTENT_WIDTH} relative py-16 sm:py-24`}>
-          <div className="max-w-3xl">
-            <SectionLabel>DOCURA · Personal document intelligence</SectionLabel>
-            <h1 className="mt-4 text-balance text-3xl font-bold leading-tight tracking-tight text-foreground sm:text-5xl">
-              Understand your documents.{" "}
-              <span className="text-accent">Fill forms with confidence.</span>
-            </h1>
-            <p className="mt-5 max-w-2xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
-              DOCURA reads the documents you upload, turns them into a structured record you
-              control, and helps you complete forms and applications using only the information
-              you authorize.
-            </p>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+          <Reveal stagger onMount className="mx-auto max-w-3xl text-center">
+            {/* Brand lockup: DOCURA (animated wordmark) with the tagline directly beneath it. The
+                scramble animation is scoped to the HyperText word only; nothing else here moves. */}
+            <RevealItem>
+              <div className="flex justify-center">
+                <HyperText
+                  text="DOCURA"
+                  className="text-5xl font-bold leading-none tracking-tight text-foreground sm:text-6xl"
+                />
+              </div>
+              <p className="label-system mt-1">Personal document intelligence</p>
+            </RevealItem>
+            <RevealItem>
+              <h1 className="mt-6 text-balance text-3xl font-bold leading-tight tracking-tight text-foreground sm:text-5xl">
+                Understand your documents.{" "}
+                <span className="text-accent">Fill forms with confidence.</span>
+              </h1>
+            </RevealItem>
+            <RevealItem>
+              <p className="mx-auto mt-5 max-w-2xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
+                DOCURA reads the documents you upload, turns them into a structured record you
+                control, and helps you complete forms and applications using only the information
+                you authorize.
+              </p>
+            </RevealItem>
+            <RevealItem className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
               <Button asChild>
                 <Link to="/ask">
                   Ask DOCURA <ArrowRight className="size-4" aria-hidden />
@@ -256,63 +287,59 @@ export default function OverviewPage() {
               <Button asChild variant="outline">
                 <Link to="/documents">View documents</Link>
               </Button>
-            </div>
-          </div>
+            </RevealItem>
+          </Reveal>
         </div>
       </section>
 
       {/* 2 · WHAT IS DOCURA --------------------------------------------------------------- */}
       <section className={`${CONTENT_WIDTH} py-16 sm:py-20`}>
-        <SectionHeading
-          label="What is DOCURA"
-          title="A layer of understanding over your own documents"
-          lead="DOCURA is not a place to store files and forget them. It reads what you give it, keeps track of where each detail came from, and puts that understanding to work when you need it."
-        />
-        <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Reveal>
+          <SectionHeading
+            label="What is DOCURA"
+            title="A layer of understanding over your own documents"
+            lead="DOCURA is not a place to store files and forget them. It reads what you give it, keeps track of where each detail came from, and puts that understanding to work when you need it."
+          />
+        </Reveal>
+        <Reveal stagger className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {WHAT_IS.map((f) => (
-            <FeatureCard key={f.title} {...f} />
+            <RevealItem key={f.title} className="h-full">
+              <FeatureCard {...f} />
+            </RevealItem>
           ))}
-        </div>
+        </Reveal>
       </section>
 
-      {/* 3 · HOW DOCURA WORKS (vertical timeline) ----------------------------------------- */}
+      {/* 3 · HOW DOCURA WORKS (floating-card timeline) ------------------------------------ */}
       <section className="border-y border-border bg-surface/30">
         <div className={`${CONTENT_WIDTH} py-16 sm:py-20`}>
-          <SectionHeading label="How it works" title="From documents to a completed form" />
-          <ol className="mt-10 space-y-0">
-            {STEPS.map((step, i) => (
-              <li key={step.n} className="relative flex gap-4 pb-8 last:pb-0 sm:gap-6">
-                {/* dashed connecting rail (hidden on the last node) */}
-                {i < STEPS.length - 1 ? (
-                  <span
-                    aria-hidden
-                    className="absolute left-[19px] top-11 h-[calc(100%-1.5rem)] w-px border-l border-dashed border-border sm:left-[23px]"
-                  />
-                ) : null}
-                <span className="relative z-10 flex size-10 shrink-0 items-center justify-center rounded-full border border-accent/40 bg-shell text-accent sm:size-12">
-                  <step.icon className="size-4 sm:size-5" aria-hidden />
-                </span>
-                <div className="pt-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs text-accent">{step.n}</span>
-                    <h3 className="text-base font-semibold text-foreground sm:text-lg">{step.title}</h3>
-                  </div>
-                  <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-muted-foreground">{step.body}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
+          <Reveal>
+            <SectionHeading label="How it works" title="From documents to a completed form" />
+          </Reveal>
+          {/* Floating pinned-card timeline (21st.dev "how-it-works", re-themed to DOCURA). The
+              step content is unchanged; only the presentation moved from the vertical list. */}
+          <div className="mt-12">
+            <HowItWorks
+              steps={STEPS.map((step) => ({
+                title: step.title,
+                description: step.body,
+                icon: step.icon,
+              }))}
+            />
+          </div>
         </div>
       </section>
 
       {/* 4 · DOCUMENTS + FORMS (bento) ---------------------------------------------------- */}
       <section className={`${CONTENT_WIDTH} py-16 sm:py-20`}>
-        <SectionHeading
-          label="Documents & forms"
-          title="What DOCURA works with"
-          lead="Two things move through DOCURA: the documents you upload, and the forms you are trying to complete. The record in the middle connects them."
-        />
-        <div className="mt-10 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <Reveal>
+          <SectionHeading
+            label="Documents & forms"
+            title="What DOCURA works with"
+            lead="Two things move through DOCURA: the documents you upload, and the forms you are trying to complete. The record in the middle connects them."
+          />
+        </Reveal>
+        <Reveal className="mt-10 grid grid-cols-1 gap-4 lg:grid-cols-3">
           <div className="rounded-md border border-border bg-surface/70 p-6 lg:row-span-2 lg:flex lg:flex-col">
             <span className="flex size-9 items-center justify-center rounded-md border border-border bg-surface-2 text-accent">
               <FileText className="size-4" aria-hidden />
@@ -351,55 +378,100 @@ export default function OverviewPage() {
               back to you for review — never submitting anything on your behalf.
             </p>
           </div>
-        </div>
+        </Reveal>
       </section>
 
       {/* 5 · BROWSER EXTENSION ------------------------------------------------------------ */}
       <section className="border-y border-border bg-surface/30">
         <div className={`${CONTENT_WIDTH} py-16 sm:py-20`}>
           <div className="grid grid-cols-1 gap-10 lg:grid-cols-2 lg:items-start">
-            <SectionHeading
-              label="Browser extension"
-              title="DOCURA where the form actually lives"
-              lead="The DOCURA browser extension brings your record to the page you are filling in — on your terms. It is built so that control and privacy hold by construction, not by a setting you have to remember."
-            />
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Reveal>
+              <SectionHeading
+                label="Browser extension"
+                title="DOCURA where the form actually lives"
+                lead="The DOCURA browser extension brings your record to the page you are filling in — on your terms. It is built so that control and privacy hold by construction, not by a setting you have to remember."
+              />
+            </Reveal>
+            <Reveal stagger className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {EXTENSION_POINTS.map((f) => (
-                <FeatureCard key={f.title} {...f} />
+                <RevealItem key={f.title} className="h-full">
+                  <FeatureCard {...f} />
+                </RevealItem>
               ))}
-            </div>
+            </Reveal>
           </div>
         </div>
       </section>
 
       {/* 6 · EXTENSION EXPLAINER VIDEO ---------------------------------------------------- */}
       <section className={`${CONTENT_WIDTH} py-16 sm:py-20`}>
-        <SectionHeading
-          label="Watch"
-          title="How the DOCURA extension works"
-          lead="A short walkthrough of activating the extension, reading a form, and handing it back — coming soon."
-          className="mx-auto text-center"
-        />
-        <div className="mx-auto mt-10 max-w-4xl">
+        <Reveal>
+          <SectionHeading
+            label="Watch"
+            title="How the DOCURA extension works"
+            lead="A short walkthrough of activating the extension, reading a form, and handing it back — coming soon."
+            className="mx-auto text-center"
+          />
+        </Reveal>
+        <Reveal className="mx-auto mt-10 max-w-4xl">
           <VideoThumbnailPlayer
             videoSrc={EXTENSION_VIDEO_SRC}
             title="How the DOCURA extension works"
             placeholderLabel="Extension walkthrough · coming soon"
           />
+        </Reveal>
+      </section>
+
+      {/* 6.5 · EXTENSION DOWNLOAD & INSTALL ------------------------------------------------ */}
+      <section className="border-y border-border bg-surface/30">
+        <div className={`${CONTENT_WIDTH} py-16 sm:py-20`}>
+          <Reveal>
+            <SectionHeading
+              label="Get the extension"
+              title="DOCURA Browser Extension"
+              lead="Use the DOCURA browser extension to access your stored document information while filling supported web forms."
+            />
+          </Reveal>
+          <Reveal as="ol" stagger className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            {EXTENSION_INSTALL.map((step, i) => (
+              <RevealItem as="li" key={step.title} className="rounded-md border border-border bg-shell/60 p-5">
+                <div className="flex items-center justify-between">
+                  <span className="flex size-9 items-center justify-center rounded-md border border-border bg-surface-2 text-accent">
+                    <step.icon className="size-4" aria-hidden />
+                  </span>
+                  <span className="font-mono text-xs text-muted-foreground">{`0${i + 1}`}</span>
+                </div>
+                <h3 className="mt-4 text-sm font-semibold text-foreground">{step.title}</h3>
+                <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{step.body}</p>
+              </RevealItem>
+            ))}
+          </Reveal>
+          <Reveal className="mt-10 flex flex-col items-center gap-4 text-center">
+            <Button asChild>
+              <a href="/downloads/docura-extension.zip" download>
+                <Download className="size-4" aria-hidden /> Download Extension
+              </a>
+            </Button>
+            <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
+              Review the information before using it. DOCURA does not submit the form on your behalf.
+            </p>
+          </Reveal>
         </div>
       </section>
 
       {/* 7 · FORM-SESSION JOURNEY (horizontal stepper) ------------------------------------ */}
       <section className="border-y border-border bg-surface/30">
         <div className={`${CONTENT_WIDTH} py-16 sm:py-20`}>
-          <SectionHeading
-            label="The journey"
-            title="How a form session flows"
-            lead="Every form session moves through the same stages — always ending back in your hands."
-          />
-          <ol className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <Reveal>
+            <SectionHeading
+              label="The journey"
+              title="How a form session flows"
+              lead="Every form session moves through the same stages — always ending back in your hands."
+            />
+          </Reveal>
+          <Reveal as="ol" stagger className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
             {FORM_LIFECYCLE.map((stage, i) => (
-              <li key={stage.title} className="rounded-md border border-border bg-shell/60 p-5">
+              <RevealItem as="li" key={stage.title} className="rounded-md border border-border bg-shell/60 p-5">
                 <div className="flex items-center justify-between">
                   <span className="flex size-9 items-center justify-center rounded-md border border-border bg-surface-2 text-accent">
                     <stage.icon className="size-4" aria-hidden />
@@ -408,18 +480,20 @@ export default function OverviewPage() {
                 </div>
                 <h3 className="mt-4 text-sm font-semibold text-foreground">{stage.title}</h3>
                 <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{stage.body}</p>
-              </li>
+              </RevealItem>
             ))}
-          </ol>
+          </Reveal>
         </div>
       </section>
 
       {/* 8 · WHAT YOU CAN DO -------------------------------------------------------------- */}
       <section className={`${CONTENT_WIDTH} py-16 sm:py-20`}>
-        <SectionHeading label="Inside DOCURA" title="What you can do" />
-        <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Reveal>
+          <SectionHeading label="Inside DOCURA" title="What you can do" />
+        </Reveal>
+        <Reveal stagger className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2">
           {CAPABILITIES.map((c) => (
-            <div key={c.title} className="flex flex-col rounded-md border border-border bg-surface/70 p-6">
+            <RevealItem key={c.title} className="flex flex-col rounded-md border border-border bg-surface/70 p-6">
               <div className="flex items-start gap-4">
                 <span className="flex size-10 shrink-0 items-center justify-center rounded-md border border-border bg-surface-2 text-accent">
                   <c.icon className="size-4" aria-hidden />
@@ -435,30 +509,34 @@ export default function OverviewPage() {
               >
                 {c.cta} <ArrowRight className="size-3.5" aria-hidden />
               </Link>
-            </div>
+            </RevealItem>
           ))}
-        </div>
+        </Reveal>
       </section>
 
       {/* 9 · USER CONTROL / SAFETY -------------------------------------------------------- */}
       <section className="border-y border-border bg-surface/30">
         <div className={`${CONTENT_WIDTH} py-16 sm:py-20`}>
-          <SectionHeading
-            label="Control & authorization"
-            title="Your information, on your terms"
-            lead="DOCURA is built around your authorization. These are concrete behaviours in the product — not promises."
-          />
-          <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <Reveal>
+            <SectionHeading
+              label="Control & authorization"
+              title="Your information, on your terms"
+              lead="DOCURA is built around your authorization. These are concrete behaviours in the product — not promises."
+            />
+          </Reveal>
+          <Reveal stagger className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-3">
             {CONTROLS.map((f) => (
-              <FeatureCard key={f.title} {...f} />
+              <RevealItem key={f.title} className="h-full">
+                <FeatureCard {...f} />
+              </RevealItem>
             ))}
-          </div>
+          </Reveal>
         </div>
       </section>
 
       {/* 10 · CTA ------------------------------------------------------------------------- */}
       <section className={`${CONTENT_WIDTH} py-16 sm:py-24`}>
-        <div className="relative overflow-hidden rounded-md border border-accent/30 bg-surface/70 px-6 py-12 text-center sm:px-12 sm:py-16">
+        <Reveal className="relative overflow-hidden rounded-md border border-accent/30 bg-surface/70 px-6 py-12 text-center sm:px-12 sm:py-16">
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_80%_at_50%_0%,hsl(var(--accent)/0.10),transparent_70%)]" />
           <div className="relative">
             <h2 className="text-balance text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
@@ -478,12 +556,12 @@ export default function OverviewPage() {
               </Button>
             </div>
           </div>
-        </div>
+        </Reveal>
       </section>
 
       {/* 11 · FOOTER ---------------------------------------------------------------------- */}
       <footer className="border-t border-border">
-        <div className={`${CONTENT_WIDTH} flex flex-col items-center justify-between gap-6 py-10 sm:flex-row`}>
+        <Reveal className={`${CONTENT_WIDTH} flex flex-col items-center justify-between gap-6 py-10 sm:flex-row`}>
           <div className="flex items-center gap-2">
             <span className="flex size-6 items-center justify-center rounded-md bg-accent">
               <MessageSquare className="size-3.5 text-accent-foreground" aria-hidden />
@@ -508,7 +586,7 @@ export default function OverviewPage() {
             ))}
           </nav>
           <p className="text-xs text-muted-foreground">Personal document intelligence</p>
-        </div>
+        </Reveal>
       </footer>
     </div>
   );

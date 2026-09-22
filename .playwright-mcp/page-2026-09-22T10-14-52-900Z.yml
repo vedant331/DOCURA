@@ -1,0 +1,21 @@
+- main [ref=f3e24]:
+  - generic [ref=f3e25]:
+    - generic [ref=f3e27]:
+      - generic [ref=f3e28]: System Node · New Archive
+      - heading "CREATE IDENTITY" [level=1] [ref=f3e29]: CREATEIDENTITY
+    - form "Create account" [ref=f3e30]:
+      - generic [ref=f3e31]:
+        - generic [ref=f3e32]: Email
+        - textbox "Email" [active] [ref=f3e34]:
+          - /placeholder: id@domain
+      - generic [ref=f3e35]:
+        - generic [ref=f3e36]: Sequence Key
+        - textbox "Sequence Key" [ref=f3e38]:
+          - /placeholder: ••••••••
+      - generic [ref=f3e39]:
+        - generic [ref=f3e40]: Confirm Sequence Key
+        - textbox "Confirm Sequence Key" [ref=f3e42]:
+          - /placeholder: ••••••••
+      - button "Create Identity" [ref=f3e43] [cursor=pointer]
+    - link "Return to Sign In" [ref=f3e45] [cursor=pointer]:
+      - /url: /login

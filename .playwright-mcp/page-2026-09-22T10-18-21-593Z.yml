@@ -1,0 +1,64 @@
+- generic [ref=f3e46]:
+  - banner [ref=f3e47]:
+    - generic "DOCURA" [ref=f3e53] [cursor=pointer]:
+      - generic [aria-hidden] [ref=f3e54]:
+        - generic [ref=f3e55]: D
+        - generic [ref=f3e56]: O
+        - generic [ref=f3e57]: C
+        - generic [ref=f3e58]: U
+        - generic [ref=f3e59]: R
+        - generic [ref=f3e60]: A
+    - navigation "Primary" [ref=f3e61]:
+      - tablist [ref=f3e62]:
+        - tab "Overview" [ref=f3e63] [cursor=pointer]
+        - tab "Documents" [selected] [ref=f3e64] [cursor=pointer]
+        - tab "My Record" [ref=f3e65] [cursor=pointer]
+        - tab "Activity" [ref=f3e66] [cursor=pointer]
+        - tab "Settings" [ref=f3e67] [cursor=pointer]
+        - listitem [aria-hidden] [ref=f3e68]
+    - generic [ref=f3e69]:
+      - generic [ref=f3e70]: D
+      - button "Sign out" [ref=f3e71] [cursor=pointer]
+  - generic [ref=f3e147]:
+    - banner [ref=f3e148]:
+      - generic [ref=f3e149]:
+        - generic [ref=f3e150]:
+          - paragraph [ref=f3e151]: Vault
+          - heading "Documents" [level=1] [ref=f3e152]
+          - paragraph [ref=f3e153]: Every document you have stored, with its type, status, and original.
+        - button "Upload" [ref=f3e155] [cursor=pointer]
+    - search [ref=f3e156]:
+      - searchbox "Search documents and your record" [ref=f3e158]
+      - button "Search" [ref=f3e159] [cursor=pointer]
+    - generic [ref=f3e208]:
+      - generic [ref=f3e209]:
+        - paragraph [ref=f3e210]: 1 document
+        - generic [ref=f3e211]:
+          - text: Sort
+          - combobox "Sort" [ref=f3e212]:
+            - option "Most recent" [selected]
+            - option "Name"
+            - option "Status"
+      - table [ref=f3e214]:
+        - rowgroup [ref=f3e215]:
+          - row [ref=f3e216]:
+            - columnheader "Document" [ref=f3e217]
+            - columnheader "Type" [ref=f3e218]
+            - columnheader "Status" [ref=f3e219]
+            - columnheader "Added" [ref=f3e220]
+            - columnheader "Size" [ref=f3e221]
+            - columnheader "Actions" [ref=f3e222]
+        - rowgroup [ref=f3e223]:
+          - row [ref=f3e224]:
+            - cell [ref=f3e225]:
+              - link "docura_test_id.png" [ref=f3e226] [cursor=pointer]:
+                - /url: /app/documents/52ada1af-f84a-4182-9288-46e17eb937c3
+            - cell "unclassified" [ref=f3e227]
+            - cell "Queued" [ref=f3e228]
+            - cell "Sep 22, 2026" [ref=f3e235]
+            - cell "52 KB" [ref=f3e236]
+            - cell [ref=f3e237]:
+              - generic [ref=f3e238]:
+                - link "View docura_test_id.png" [ref=f3e239] [cursor=pointer]:
+                  - /url: /app/documents/52ada1af-f84a-4182-9288-46e17eb937c3
+                - button "Delete docura_test_id.png" [ref=f3e240] [cursor=pointer]

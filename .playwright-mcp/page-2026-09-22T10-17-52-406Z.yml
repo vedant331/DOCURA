@@ -1,0 +1,55 @@
+- generic:
+  - generic [aria-hidden]:
+    - generic:
+      - banner:
+        - generic:
+          - generic:
+            - generic:
+              - generic [aria-hidden]:
+                - generic: D
+                - generic: O
+                - generic: C
+                - generic: U
+                - generic: R
+                - generic: A
+        - navigation:
+          - tablist:
+            - tab: Overview
+            - tab [selected]: Documents
+            - tab: My Record
+            - tab: Activity
+            - tab: Settings
+            - listitem [aria-hidden]
+        - generic:
+          - generic: D
+          - button:
+            - generic: Sign out
+      - generic:
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - banner:
+                  - generic:
+                    - generic:
+                      - paragraph: Vault
+                      - heading [level=1]: Documents
+                      - paragraph: Every document you have stored, with its type, status, and original.
+                    - generic:
+                      - button: Upload
+                - search:
+                  - generic:
+                    - searchbox
+                  - button: Search
+                - status:
+                  - generic: Loading documents
+  - dialog [active] [ref=f3e170]:
+    - generic [ref=f3e171]:
+      - heading "Upload documents" [level=2] [ref=f3e172]
+      - paragraph [ref=f3e173]: PDF, JPG or PNG · up to 10 MB each · up to 5 at a time.
+    - status [ref=f3e201]:
+      - generic [ref=f3e202]: 1 document added and queued for processing.
+    - generic [ref=f3e182]:
+      - button "Add more" [ref=f3e206] [cursor=pointer]
+      - button "Done" [ref=f3e207] [cursor=pointer]
+    - button "Close" [ref=f3e184] [cursor=pointer]

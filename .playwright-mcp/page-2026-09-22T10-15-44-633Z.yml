@@ -1,0 +1,37 @@
+- generic [ref=f3e46]:
+  - banner [ref=f3e47]:
+    - generic "DOCURA" [ref=f3e53] [cursor=pointer]:
+      - generic [aria-hidden] [ref=f3e54]:
+        - generic [ref=f3e55]: D
+        - generic [ref=f3e56]: O
+        - generic [ref=f3e57]: C
+        - generic [ref=f3e58]: U
+        - generic [ref=f3e59]: R
+        - generic [ref=f3e60]: A
+    - navigation "Primary" [ref=f3e61]:
+      - tablist [ref=f3e62]:
+        - tab "Overview" [ref=f3e63] [cursor=pointer]
+        - tab "Documents" [active] [selected] [ref=f3e64] [cursor=pointer]
+        - tab "My Record" [ref=f3e65] [cursor=pointer]
+        - tab "Activity" [ref=f3e66] [cursor=pointer]
+        - tab "Settings" [ref=f3e67] [cursor=pointer]
+        - listitem [aria-hidden] [ref=f3e68]
+    - generic [ref=f3e69]:
+      - generic [ref=f3e70]: D
+      - button "Sign out" [ref=f3e71] [cursor=pointer]
+  - generic [ref=f3e147]:
+    - banner [ref=f3e148]:
+      - generic [ref=f3e149]:
+        - generic [ref=f3e150]:
+          - paragraph [ref=f3e151]: Vault
+          - heading "Documents" [level=1] [ref=f3e152]
+          - paragraph [ref=f3e153]: Every document you have stored, with its type, status, and original.
+        - button "Upload" [ref=f3e155] [cursor=pointer]
+    - search [ref=f3e156]:
+      - searchbox "Search documents and your record" [ref=f3e158]
+      - button "Search" [ref=f3e159] [cursor=pointer]
+    - generic [ref=f3e160]:
+      - generic [ref=f3e165]:
+        - paragraph [ref=f3e166]: No documents yet
+        - generic [ref=f3e167]: Upload a PDF, JPG, or PNG to get started.
+      - button "Upload documents" [ref=f3e168] [cursor=pointer]

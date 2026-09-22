@@ -1,12 +1,15 @@
 name: DOCURA Worker
 
-# Drains the DOCURA processing queue by calling the serverless trigger endpoint.
-# The long-running app.worker poll loop cannot run on Vercel, so this scheduled
-# job is the external periodic caller for POST /internal/process.
+# Drains the DOCURA processing queue by calling the serverless trigger endpoint
+# (POST /internal/process). The long-running app.worker poll loop cannot run on Vercel.
+#
+# NOTE: this is the MANUAL / best-effort BACKUP trigger only. GitHub's `schedule` is
+# unreliable (it has never fired for this repo — see docs/PRODUCTION_WORKER_TRIGGER.md);
+# the reliable PRIMARY periodic trigger is an external cron pinger documented there.
 on:
   schedule:
-    - cron: "*/5 * * * *"   # every 5 minutes (UTC)
-  workflow_dispatch: {}       # manual runs for testing
+    - cron: "*/5 * * * *"   # every 5 minutes (UTC) — best-effort backup; often skipped by GitHub
+  workflow_dispatch: {}       # manual runs / on-demand drain
 
 permissions:
   contents: read
