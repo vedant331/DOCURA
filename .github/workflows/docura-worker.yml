@@ -26,7 +26,6 @@ jobs:
           WORKER_SECRET: ${{ secrets.DOCURA_WORKER_TRIGGER_SECRET }}
         run: |
           set -euo pipefail
-          echo "secret length: ${#WORKER_SECRET}"
           status=$(curl -sS -m 60 -o response.json -w '%{http_code}' \
             -X POST 'https://docura-nine.vercel.app/internal/process' \
             -H "X-Internal-Secret: ${WORKER_SECRET}") || status="000"
