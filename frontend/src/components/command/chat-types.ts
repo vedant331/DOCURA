@@ -55,9 +55,9 @@ export function userMessage(text: string): ChatMessageData {
 // Only actions that have a real in-app destination get a route; page/extension actions
 // (open_form, start_form_session) render as informational, never faking a navigation.
 const ACTION_ROUTES: Record<string, string> = {
-  view_documents: "/app/documents",
-  open_documents: "/app/documents",
-  open_record: "/app/record",
+  view_documents: "/documents",
+  open_documents: "/documents",
+  open_record: "/record",
 };
 
 const REQUIREMENT_STATUSES: RequirementStatus[] = [

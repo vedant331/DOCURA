@@ -101,8 +101,8 @@ describe("Login", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/not accepted/i);
   });
 
-  // 5. Successful login redirects to /app.
-  it("redirects to /app on successful login", async () => {
+  // 5. Successful login redirects to the Overview landing page.
+  it("redirects to /overview on successful login", async () => {
     const user = userEvent.setup();
     mocked.login.mockResolvedValue(sampleLogin);
 
@@ -112,9 +112,9 @@ describe("Login", () => {
     await user.click(screen.getByRole("button", { name: /initialize stream/i }));
 
     // Sign-in now plays the brand greeting ("Docura Says Hello") before navigating, so allow for
-    // that intentional (~2s) transition before /app mounts.
+    // that intentional (~2s) transition before /overview mounts.
     expect(
-      await screen.findByPlaceholderText(/ask docura anything/i, undefined, { timeout: 4000 }),
+      await screen.findByRole("heading", { name: /understand your documents/i }, { timeout: 4000 }),
     ).toBeInTheDocument();
     expect(localStorage.getItem("docura.token")).toBe("test-token");
   });
@@ -136,7 +136,7 @@ describe("Register", () => {
     expect(mocked.register).not.toHaveBeenCalled();
   });
 
-  it("registers then signs in and lands on /app", async () => {
+  it("registers then signs in and lands on /overview", async () => {
     const user = userEvent.setup();
     mocked.register.mockResolvedValue(sampleLogin.user);
     mocked.login.mockResolvedValue(sampleLogin);
@@ -147,7 +147,7 @@ describe("Register", () => {
     await user.type(screen.getByLabelText(/confirm sequence key/i), "abcdefgh12");
     await user.click(screen.getByRole("button", { name: /create identity/i }));
 
-    expect(await screen.findByPlaceholderText(/ask docura anything/i)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /understand your documents/i })).toBeInTheDocument();
     expect(mocked.register).toHaveBeenCalledWith("new@docura.test", "abcdefgh12");
   });
 });

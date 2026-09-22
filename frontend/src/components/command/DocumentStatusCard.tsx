@@ -52,7 +52,7 @@ export function DocumentStatusCard({
           </div>
         </div>
         <Button asChild variant="primary" size="sm" className="mt-3 w-full">
-          <Link to="/app/documents">Upload Documents</Link>
+          <Link to="/documents">Upload Documents</Link>
         </Button>
       </div>
     );
@@ -73,7 +73,7 @@ export function DocumentStatusCard({
         </div>
       </div>
       <Button asChild variant="outline" size="sm" className="mt-3 w-full">
-        <Link to="/app/documents">View Documents</Link>
+        <Link to="/documents">View Documents</Link>
       </Button>
     </div>
   );

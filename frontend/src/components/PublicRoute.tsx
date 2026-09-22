@@ -17,6 +17,6 @@ export function PublicRoute() {
   if (status === "loading") return <AuthLoadingState />;
   // Defer the post-login redirect while the "Docura Says Hello" greeting is playing, so the login
   // page (and its grid) stays mounted; the greeting navigates to the destination when it ends.
-  if (status === "authenticated" && !playing) return <Navigate to={from ?? "/app"} replace />;
+  if (status === "authenticated" && !playing) return <Navigate to={from ?? "/overview"} replace />;
   return <Outlet />;
 }

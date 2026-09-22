@@ -42,7 +42,7 @@ export default function Register() {
     try {
       // Backend opens no session on register, so signUp registers then signs in.
       await signUp(email.trim(), password);
-      navigate("/app", { replace: true });
+      navigate("/overview", { replace: true });
     } catch (err) {
       const message = err instanceof ApiError ? err.message : "Something went wrong. Try again.";
       setFormError(message);

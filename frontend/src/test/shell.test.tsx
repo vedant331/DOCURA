@@ -65,27 +65,27 @@ beforeEach(() => {
 });
 
 describe("Route protection", () => {
-  // 9. Protected /app route redirects unauthenticated users to /login.
-  it("redirects an unauthenticated user away from /app", async () => {
-    renderApp(["/app"]);
+  // 9. Protected routes redirect unauthenticated users to /login.
+  it("redirects an unauthenticated user away from a protected route", async () => {
+    renderApp(["/overview"]);
     // No token → guard sends to /login; the login heading proves the redirect.
     expect(await screen.findByRole("heading", { name: /neural/i })).toBeInTheDocument();
     expect(mocked.me).not.toHaveBeenCalled();
   });
 
-  // 10. Authenticated user can access /app.
-  it("lets an authenticated user reach /app", async () => {
+  // 10. Authenticated user can access the chat workspace at /ask.
+  it("lets an authenticated user reach /ask", async () => {
     signedIn();
-    renderApp(["/app"]);
+    renderApp(["/ask"]);
     expect(await screen.findByPlaceholderText(/ask docura anything/i)).toBeInTheDocument();
     expect(mocked.me).toHaveBeenCalledWith("test-token");
   });
 
-  // Bonus: an authenticated user visiting /login is redirected to /app.
+  // Bonus: an authenticated user visiting /login is redirected to the Overview landing page.
   it("redirects an authenticated user away from /login", async () => {
     signedIn();
     renderApp(["/login"]);
-    expect(await screen.findByPlaceholderText(/ask docura anything/i)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /understand your documents/i })).toBeInTheDocument();
   });
 });
 
@@ -96,7 +96,7 @@ describe("Application shell", () => {
     mocked.logout.mockResolvedValue({ revoked: 1 });
     signedIn();
 
-    renderApp(["/app"]);
+    renderApp(["/ask"]);
     await screen.findByPlaceholderText(/ask docura anything/i);
 
     // The notch nav's Sign Out control (rendered in both the desktop + mobile notch chrome).
@@ -110,12 +110,12 @@ describe("Application shell", () => {
   // 12. SlideTabs navigation renders the primary destinations as tabs (real DOCURA routes).
   it("renders the slide-tabs navigation with the primary destinations", async () => {
     signedIn();
-    renderApp(["/app"]);
-    await screen.findByPlaceholderText(/ask docura anything/i);
+    renderApp(["/overview"]);
+    await screen.findByRole("heading", { name: /understand your documents/i });
 
     expect(screen.getAllByRole("tab", { name: /documents/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("tab", { name: /activity/i }).length).toBeGreaterThan(0);
-    // The current route (Overview / index) is the selected tab.
+    // The current route (Overview) is the selected tab.
     expect(screen.getByRole("tab", { name: /overview/i })).toHaveAttribute("aria-selected", "true");
   });
 });

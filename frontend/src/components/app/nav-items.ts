@@ -1,22 +1,23 @@
-import { Activity, FileText, LayoutGrid, Settings, UserSquare, type LucideIcon } from "lucide-react";
+import { Activity, FileText, LayoutGrid, MessageSquare, UserSquare, type LucideIcon } from "lucide-react";
 
 // The authenticated navigation, defined once so the sidebar and the mobile drawer never
-// drift apart (APP-1 §2/§7). These are foundation destinations only — APP-1 builds the
-// shell, not the features behind them (§11).
+// drift apart (APP-1 §2/§7). Overview is the informational landing surface; Ask is the AI
+// chat workspace (the surface that previously lived at the index route). Settings stays a
+// real route but is reached from the account avatar rather than the primary nav.
 export interface NavItem {
   to: string;
   label: string;
   code: string; // mono system tag, DOCURA style
   icon: LucideIcon;
-  end?: boolean; // exact match (for the index route)
+  end?: boolean; // exact match (for routes with no sub-routes)
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { to: "/app", label: "Overview", code: "00", icon: LayoutGrid, end: true },
-  { to: "/app/documents", label: "Documents", code: "01", icon: FileText },
-  { to: "/app/record", label: "My Record", code: "02", icon: UserSquare },
-  { to: "/app/activity", label: "Activity", code: "03", icon: Activity },
-  { to: "/app/settings", label: "Settings", code: "04", icon: Settings },
+  { to: "/overview", label: "Overview", code: "00", icon: LayoutGrid, end: true },
+  { to: "/ask", label: "Ask", code: "01", icon: MessageSquare, end: true },
+  { to: "/documents", label: "Documents", code: "02", icon: FileText },
+  { to: "/record", label: "My Record", code: "03", icon: UserSquare },
+  { to: "/activity", label: "Activity", code: "04", icon: Activity },
 ];
 
 export function titleForPath(pathname: string): string {

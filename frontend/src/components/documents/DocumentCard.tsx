@@ -25,7 +25,7 @@ export function DocumentCard({
         <div className="min-w-0">
           <p className="label-system">{document.document_type}</p>
           <Link
-            to={`/app/documents/${document.id}`}
+            to={`/documents/${document.id}`}
             className="mt-1 block truncate text-sm font-semibold text-foreground hover:underline"
             title={document.original_filename}
           >
@@ -43,7 +43,7 @@ export function DocumentCard({
 
       <div className="flex items-center gap-1">
         <Button asChild variant="ghost" size="sm">
-          <Link to={`/app/documents/${document.id}`} aria-label={`View ${document.original_filename}`}>
+          <Link to={`/documents/${document.id}`} aria-label={`View ${document.original_filename}`}>
             <Eye className="size-3.5" aria-hidden /> View
           </Link>
         </Button>

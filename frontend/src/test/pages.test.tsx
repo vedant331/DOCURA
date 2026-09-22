@@ -104,7 +104,7 @@ beforeEach(() => {
 
 describe("Command center — AI chat workspace (§5)", () => {
   it("shows the welcome + composer + New chat, with the old status strip removed", async () => {
-    renderApp(["/app"]);
+    renderApp(["/ask"]);
     // The chat is the primary surface (composer always present) with the welcome state.
     expect(await screen.findByPlaceholderText(/ask docura anything/i)).toBeInTheDocument();
     expect(screen.getByText(/how can docura help/i)).toBeInTheDocument();
@@ -119,7 +119,7 @@ describe("Command center — AI chat workspace (§5)", () => {
 
   it("creates a conversation on load and sends messages to the backend", async () => {
     const user = userEvent.setup();
-    renderApp(["/app"]);
+    renderApp(["/ask"]);
     const composer = await screen.findByPlaceholderText(/ask docura anything/i);
     // A real backend conversation is created (never a frontend-only fake).
     await waitFor(() => expect(m.createConversation).toHaveBeenCalledTimes(1));
@@ -148,7 +148,7 @@ describe("Command center — AI chat workspace (§5)", () => {
         },
       }),
     });
-    renderApp(["/app"]);
+    renderApp(["/ask"]);
     const composer = await screen.findByPlaceholderText(/ask docura anything/i);
     await user.type(composer, "Am I ready?");
     await user.keyboard("{Enter}");
@@ -170,7 +170,7 @@ describe("Command center — AI chat workspace (§5)", () => {
       ],
       count: 2,
     });
-    renderApp(["/app"]);
+    renderApp(["/ask"]);
     expect(await screen.findByText(/earlier question/i)).toBeInTheDocument();
     expect(screen.getByText(/earlier answer/i)).toBeInTheDocument();
     await waitFor(() => expect(m.listMessages).toHaveBeenCalledWith("cX"));
@@ -179,7 +179,7 @@ describe("Command center — AI chat workspace (§5)", () => {
 
   it("creates a new backend conversation from the New chat button", async () => {
     const user = userEvent.setup();
-    renderApp(["/app"]);
+    renderApp(["/ask"]);
     await screen.findByPlaceholderText(/ask docura anything/i);
     await waitFor(() => expect(m.createConversation).toHaveBeenCalledTimes(1)); // on load
     await user.click(screen.getByRole("button", { name: /new chat/i }));
@@ -189,7 +189,7 @@ describe("Command center — AI chat workspace (§5)", () => {
   it("shows an inline error when a send fails and can retry", async () => {
     const user = userEvent.setup();
     m.sendMessage.mockRejectedValueOnce(new ApiError("Cannot reach DOCURA. Check your connection and try again.", 0));
-    renderApp(["/app"]);
+    renderApp(["/ask"]);
     const composer = await screen.findByPlaceholderText(/ask docura anything/i);
     await user.type(composer, "hello");
     await user.keyboard("{Enter}");
@@ -202,13 +202,13 @@ describe("Command center — AI chat workspace (§5)", () => {
 
 describe("Documents vault (§7)", () => {
   it("renders the empty state", async () => {
-    renderApp(["/app/documents"]);
+    renderApp(["/documents"]);
     expect(await screen.findByText(/no documents yet/i)).toBeInTheDocument();
   });
 
   it("lists documents", async () => {
     m.listDocuments.mockResolvedValue({ documents: [doc()], count: 1 });
-    renderApp(["/app/documents"]);
+    renderApp(["/documents"]);
     expect(await screen.findAllByText(/aadhaar\.pdf/i)).not.toHaveLength(0);
   });
 
@@ -223,20 +223,20 @@ describe("Documents vault (§7)", () => {
       document_count: 1,
       attribute_count: 1,
     });
-    renderApp(["/app/documents"]);
+    renderApp(["/documents"]);
     const box = await screen.findByRole("searchbox", { name: /search documents and your record/i });
     await user.type(box, "priya");
     await user.keyboard("{Enter}");
     await waitFor(() => expect(m.search).toHaveBeenCalledWith("priya"));
     expect(await screen.findByText(/person\.full_name: Priya Sharma/i)).toBeInTheDocument();
     // Attribute match links to the record; document match links to its detail page.
-    expect(screen.getByRole("link", { name: /person\.full_name/i })).toHaveAttribute("href", "/app/record");
+    expect(screen.getByRole("link", { name: /person\.full_name/i })).toHaveAttribute("href", "/record");
   });
 
   it("shows an empty search state when nothing matches", async () => {
     const user = userEvent.setup();
     m.search.mockResolvedValue({ query: "zzz", documents: [], attributes: [], document_count: 0, attribute_count: 0 });
-    renderApp(["/app/documents"]);
+    renderApp(["/documents"]);
     const box = await screen.findByRole("searchbox");
     await user.type(box, "zzz");
     await user.keyboard("{Enter}");
@@ -246,7 +246,7 @@ describe("Documents vault (§7)", () => {
   it("shows a search error state on API failure", async () => {
     const user = userEvent.setup();
     m.search.mockRejectedValue(new ApiError("Search failed. Try again.", 500));
-    renderApp(["/app/documents"]);
+    renderApp(["/documents"]);
     const box = await screen.findByRole("searchbox");
     await user.type(box, "boom");
     await user.keyboard("{Enter}");
@@ -257,7 +257,7 @@ describe("Documents vault (§7)", () => {
 describe("Document detail / understanding (§9)", () => {
   it("renders the header and an honest empty extraction state", async () => {
     m.getDocument.mockResolvedValue(doc());
-    renderApp(["/app/documents/doc1"]);
+    renderApp(["/documents/doc1"]);
     expect(await screen.findByRole("heading", { name: /aadhaar\.pdf/i })).toBeInTheDocument();
     expect(await screen.findByText(/no extracted information yet/i)).toBeInTheDocument();
   });
@@ -277,7 +277,7 @@ describe("Document detail / understanding (§9)", () => {
       ],
       count: 1,
     });
-    renderApp(["/app/documents/doc1"]);
+    renderApp(["/documents/doc1"]);
     expect(await screen.findByText(/vedant kadam/i)).toBeInTheDocument();
     expect(screen.getByText(/92%/)).toBeInTheDocument(); // real confidence, not invented
   });
@@ -285,7 +285,7 @@ describe("Document detail / understanding (§9)", () => {
 
 describe("My Record (§13)", () => {
   it("shows the empty record state", async () => {
-    renderApp(["/app/record"]);
+    renderApp(["/record"]);
     expect(await screen.findByText(/no record data yet/i)).toBeInTheDocument();
   });
 
@@ -304,7 +304,7 @@ describe("My Record (§13)", () => {
       ],
       count: 1,
     });
-    renderApp(["/app/record"]);
+    renderApp(["/record"]);
     expect(await screen.findByText(/^Person$/)).toBeInTheDocument();
   });
 
@@ -314,7 +314,7 @@ describe("My Record (§13)", () => {
     const createURL = vi.fn(() => "blob:mock");
     const revokeURL = vi.fn();
     vi.stubGlobal("URL", { ...URL, createObjectURL: createURL, revokeObjectURL: revokeURL });
-    renderApp(["/app/record"]);
+    renderApp(["/record"]);
     await user.click(await screen.findByRole("button", { name: /export/i }));
     await waitFor(() => expect(m.exportRecord).toHaveBeenCalledTimes(1));
     expect(createURL).toHaveBeenCalled();
@@ -324,7 +324,7 @@ describe("My Record (§13)", () => {
 
 describe("Activity (§15)", () => {
   it("shows the empty activity state", async () => {
-    renderApp(["/app/activity"]);
+    renderApp(["/activity"]);
     expect(await screen.findByText(/no activity yet/i)).toBeInTheDocument();
   });
 
@@ -336,21 +336,21 @@ describe("Activity (§15)", () => {
       ],
       count: 1,
     });
-    renderApp(["/app/activity"]);
+    renderApp(["/activity"]);
     expect(await screen.findByText(/field filled/i)).toBeInTheDocument();
   });
 });
 
 describe("Settings (§16)", () => {
   it("renders account, security and data sections", async () => {
-    renderApp(["/app/settings"]);
+    renderApp(["/settings"]);
     expect(await screen.findByRole("button", { name: /sign out everywhere/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^delete account$/i })).toBeInTheDocument();
   });
 
   it("deletes the account after email confirmation, then signs out to /login", async () => {
     const user = userEvent.setup();
-    renderApp(["/app/settings"]);
+    renderApp(["/settings"]);
     await user.click(await screen.findByRole("button", { name: /^delete account$/i }));
 
     const dialog = await screen.findByRole("dialog");
@@ -368,7 +368,7 @@ describe("Settings (§16)", () => {
 
   it("does not delete when the confirmation email does not match", async () => {
     const user = userEvent.setup();
-    renderApp(["/app/settings"]);
+    renderApp(["/settings"]);
     await user.click(await screen.findByRole("button", { name: /^delete account$/i }));
     const dialog = await screen.findByRole("dialog");
     await user.type(within(dialog).getByLabelText(/confirm your email/i), "wrong@example.com");
@@ -383,23 +383,23 @@ describe("Form session surfaces (§17/§18/§26/§24)", () => {
   });
 
   it("renders the session entry with lifecycle controls", async () => {
-    renderApp(["/app/forms/sess1"]);
+    renderApp(["/forms/sess1"]);
     expect(await screen.findByRole("button", { name: /hand back to me/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /stop session/i })).toBeInTheDocument();
   });
 
   it("renders the readiness seam", async () => {
-    renderApp(["/app/forms/sess1/readiness"]);
+    renderApp(["/forms/sess1/readiness"]);
     expect(await screen.findByText(/readiness is computed in the extension/i)).toBeInTheDocument();
   });
 
   it("renders the review with a hand-back panel (DOCURA does not submit)", async () => {
-    renderApp(["/app/forms/sess1/review"]);
+    renderApp(["/forms/sess1/review"]);
     expect(await screen.findByText(/docura does not submit the form/i)).toBeInTheDocument();
   });
 
   it("renders the approval seam (per-instance, no approve-all)", async () => {
-    renderApp(["/app/forms/sess1/approval"]);
+    renderApp(["/forms/sess1/approval"]);
     expect(await screen.findByText(/one approval authorises exactly one disclosure/i)).toBeInTheDocument();
   });
 });

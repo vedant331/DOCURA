@@ -8,6 +8,7 @@ import ForgotPassword from "@/pages/ForgotPassword";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import ResetPassword from "@/pages/ResetPassword";
+import OverviewPage from "@/pages/app/Overview";
 import CommandCenterPage from "@/pages/app/CommandCenter";
 import DocumentsPage from "@/pages/app/Documents";
 import DocumentDetailPage from "@/pages/app/DocumentDetail";
@@ -36,19 +37,21 @@ export default function App() {
         <Route path="/reset-password" element={<ResetPassword />} />
       </Route>
 
-      <Route path="/app" element={<ProtectedRoute />}>
+      <Route element={<ProtectedRoute />}>
         <Route element={<AppShell />}>
-          {/* Command center — the primary post-login surface (§5/§35). */}
-          <Route index element={<CommandCenterPage />} />
+          {/* Overview — the informational product page and post-login landing surface. */}
+          <Route path="/overview" element={<OverviewPage />} />
+          {/* Ask — the DOCURA AI chat workspace (reuses the existing CommandCenter). */}
+          <Route path="/ask" element={<CommandCenterPage />} />
 
-          <Route path="documents" element={<DocumentsPage />} />
-          <Route path="documents/:documentId" element={<DocumentDetailPage />} />
-          <Route path="record" element={<MyRecordPage />} />
-          <Route path="activity" element={<ActivityPage />} />
-          <Route path="settings" element={<SettingsPage />} />
+          <Route path="/documents" element={<DocumentsPage />} />
+          <Route path="/documents/:documentId" element={<DocumentDetailPage />} />
+          <Route path="/record" element={<MyRecordPage />} />
+          <Route path="/activity" element={<ActivityPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
 
           {/* Form-session surfaces (§17/§18/§26/§24), nested so the session loads once. */}
-          <Route path="forms/:sessionId" element={<FormSessionLayout />}>
+          <Route path="/forms/:sessionId" element={<FormSessionLayout />}>
             <Route index element={<FormSessionOverview />} />
             <Route path="readiness" element={<ReadinessPage />} />
             <Route path="review" element={<ReviewPage />} />
@@ -57,8 +60,8 @@ export default function App() {
         </Route>
       </Route>
 
-      <Route path="/" element={<Navigate to="/app" replace />} />
-      <Route path="*" element={<Navigate to="/app" replace />} />
+      <Route path="/" element={<Navigate to="/overview" replace />} />
+      <Route path="*" element={<Navigate to="/overview" replace />} />
     </Routes>
     </>
   );

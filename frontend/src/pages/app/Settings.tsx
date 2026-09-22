@@ -105,7 +105,7 @@ export default function SettingsPage() {
               Remove individual documents (and anything extracted from them) from your vault.
             </p>
             <Button asChild variant="primary" className="mt-2">
-              <Link to="/app/documents">Open document vault</Link>
+              <Link to="/documents">Open document vault</Link>
             </Button>
           </div>
           <div className="border-t border-border pt-4">

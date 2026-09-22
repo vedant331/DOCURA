@@ -20,7 +20,7 @@ export function SourceBadge({
   const label = filename ?? `Document ${documentId.slice(0, 8)}`;
   return (
     <Link
-      to={`/app/documents/${documentId}`}
+      to={`/documents/${documentId}`}
       className={cn(
         "inline-flex items-center gap-1.5 border border-border bg-surface/50 px-2 py-0.5 font-mono text-[10px] text-muted-foreground transition-colors hover:border-mercury/40 hover:text-foreground",
         className,

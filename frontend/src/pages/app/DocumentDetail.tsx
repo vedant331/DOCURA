@@ -43,7 +43,7 @@ export default function DocumentDetailPage() {
     <>
       <PageHeader
         breadcrumbs={[
-          { label: "Documents", to: "/app/documents" },
+          { label: "Documents", to: "/documents" },
           { label: document.original_filename },
         ]}
         eyebrow={document.document_type}
@@ -58,7 +58,7 @@ export default function DocumentDetailPage() {
         }
         actions={
           <>
-            <Button variant="ghost" onClick={() => navigate("/app/documents")}>
+            <Button variant="ghost" onClick={() => navigate("/documents")}>
               <ArrowLeft className="size-4" aria-hidden /> Back
             </Button>
             {canReprocess ? (
@@ -111,7 +111,7 @@ export default function DocumentDetailPage() {
         destructive
         onConfirm={async () => {
           await api.deleteDocument(document.id);
-          navigate("/app/documents", { replace: true });
+          navigate("/documents", { replace: true });
         }}
       />
     </>

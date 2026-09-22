@@ -46,7 +46,7 @@ export function DocumentTable({
               return (
                 <tr key={d.id} className="border-b border-border last:border-b-0 hover:bg-surface/40">
                   <td className="max-w-[280px] px-4 py-3">
-                    <Link to={`/app/documents/${d.id}`} className="truncate font-medium text-foreground hover:underline" title={d.original_filename}>
+                    <Link to={`/documents/${d.id}`} className="truncate font-medium text-foreground hover:underline" title={d.original_filename}>
                       {d.original_filename}
                     </Link>
                   </td>
@@ -57,7 +57,7 @@ export function DocumentTable({
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
                       <Button asChild variant="ghost" size="icon" aria-label={`View ${d.original_filename}`}>
-                        <Link to={`/app/documents/${d.id}`}><Eye className="size-4" aria-hidden /></Link>
+                        <Link to={`/documents/${d.id}`}><Eye className="size-4" aria-hidden /></Link>
                       </Button>
                       {canReprocess && onReprocess ? (
                         <Button variant="ghost" size="icon" onClick={() => onReprocess(d)} aria-label={`Reprocess ${d.original_filename}`}>

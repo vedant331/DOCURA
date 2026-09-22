@@ -16,7 +16,7 @@ export default function Login() {
   const greeting = useGreeting();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as { from?: Location } | null)?.from?.pathname ?? "/app";
+  const from = (location.state as { from?: Location } | null)?.from?.pathname ?? "/overview";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

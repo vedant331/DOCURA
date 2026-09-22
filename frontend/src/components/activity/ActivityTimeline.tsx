@@ -66,7 +66,7 @@ export function ActivityItem({ action }: { action: FormActionResponse }) {
         <div className="mt-1 flex flex-wrap items-center gap-3 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground/70">
           <span>{formatDateTime(action.created_at)}</span>
           {action.document_id ? (
-            <Link to={`/app/documents/${action.document_id}`} className="hover:text-foreground">
+            <Link to={`/documents/${action.document_id}`} className="hover:text-foreground">
               related document
             </Link>
           ) : null}

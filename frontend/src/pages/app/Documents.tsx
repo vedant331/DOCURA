@@ -133,7 +133,7 @@ export default function DocumentsPage() {
                   {results.documents.map((d) => (
                     <li key={d.id}>
                       <Link
-                        to={`/app/documents/${d.id}`}
+                        to={`/documents/${d.id}`}
                         className="flex items-center justify-between gap-3 px-3 py-2 text-sm hover:bg-surface"
                       >
                         <span className="truncate text-foreground">{d.original_filename}</span>
@@ -155,7 +155,7 @@ export default function DocumentsPage() {
                   {results.attributes.map((a) => (
                     <li key={a.canonical_identifier}>
                       <Link
-                        to="/app/record"
+                        to="/record"
                         className="flex items-center justify-between gap-3 px-3 py-2 text-sm hover:bg-surface"
                       >
                         <span className="truncate text-foreground">

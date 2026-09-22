@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Command, LogOut } from "lucide-react";
 
 import { useAuth } from "@/auth/AuthContext";
@@ -7,6 +7,7 @@ import { NAV_ITEMS } from "@/components/app/nav-items";
 import { SlideTabs, type SlideTabItem } from "@/components/ui/slide-tabs";
 import { ScrollProgress } from "@/components/system/ScrollProgress";
 import { TextReveal } from "@/components/ui/cascade-text";
+import { ShaderBackground } from "@/components/ui/shader-background";
 
 // The authenticated application shell. The navigation is the SlideTabs bar wired to DOCURA's REAL
 // routes + active-route detection; the top bar also carries the brand mark and sign-out. The
@@ -22,8 +23,12 @@ function activeIdForPath(pathname: string): string {
   const match = [...NAV_ITEMS]
     .sort((a, b) => b.to.length - a.to.length)
     .find((item) => (item.end ? pathname === item.to : pathname.startsWith(item.to)));
-  return match?.to ?? "/app";
+  return match?.to ?? "";
 }
+
+// The main destinations that sit on the plain Deep Navy fill. Overview is deliberately
+// excluded: it renders full-width and paints its own section backgrounds.
+const BG_ROUTES = ["/ask", "/documents", "/record", "/activity", "/settings"];
 
 export function AppShell() {
   const { pathname } = useLocation();
@@ -31,11 +36,12 @@ export function AppShell() {
   const { user, signOut } = useAuth();
 
   const activeId = activeIdForPath(pathname);
-  const isChat = pathname === "/app" || pathname === "/app/";
-  // The page background applies ONLY to the five authenticated nav destinations (exact route
-  // match). Sub-routes (document detail, form sessions) and, by construction, all auth screens
-  // and the greeting keep their existing backgrounds — this is never a global body rule.
-  const showBackground = NAV_ITEMS.some((item) => item.to === pathname || `${item.to}/` === pathname);
+  const isChat = pathname === "/ask" || pathname === "/ask/";
+  const isOverview = pathname === "/overview" || pathname === "/overview/";
+  // The plain Deep Navy fill applies ONLY to the main destinations in BG_ROUTES (exact route
+  // match). Overview owns its own backgrounds; sub-routes (document detail, form sessions) and,
+  // by construction, all auth screens and the greeting keep their existing backgrounds.
+  const showBackground = BG_ROUTES.some((route) => route === pathname || `${route}/` === pathname);
   const initial = (user?.email ?? "").charAt(0).toUpperCase();
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -84,9 +90,14 @@ export function AppShell() {
 
         {/* Account + sign-out */}
         <div className="flex shrink-0 items-center gap-2">
-          <div className="hidden size-6 items-center justify-center rounded-full bg-surface-2 text-[10px] font-bold text-muted-foreground sm:flex">
+          <Link
+            to="/settings"
+            aria-label="Account settings"
+            title="Settings"
+            className="hidden size-6 items-center justify-center rounded-full bg-surface-2 text-[10px] font-bold text-muted-foreground outline-none transition-colors hover:bg-accent-soft hover:text-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-shell sm:flex"
+          >
             {initial || <span aria-hidden>·</span>}
-          </div>
+          </Link>
           {/* Compact animated pill (ButtonWithIcon pattern): on hover the icon slides across and
               rotates, spacing swaps, and border/text/icon shift to DOCURA lime. Real <button>,
               same onSignOut handler — logout behaviour is unchanged. */}
@@ -115,11 +126,28 @@ export function AppShell() {
         {showBackground ? (
           <div className="pointer-events-none absolute inset-0 z-0 bg-[#0A1128]" />
         ) : null}
+        {/* Overview only: a subtle animated Deep-Navy WebGL field behind the content. It sits in
+            the content region (below the solid header), never scrolls, and never captures pointer
+            events. A soft Deep-Navy scrim keeps the shader secondary so the content always wins. */}
+        {isOverview ? (
+          <>
+            <ShaderBackground className="pointer-events-none absolute inset-0 z-0" />
+            <div aria-hidden className="pointer-events-none absolute inset-0 z-0 bg-bg/35" />
+          </>
+        ) : null}
         <div className="relative z-10 h-full">
         {isChat ? (
           // The chat workspace owns the full viewport height (internal scroll + sticky composer).
           <div className="h-full w-full">
             <Outlet />
+          </div>
+        ) : isOverview ? (
+          // Overview: a full-width informational page that manages its own section widths and
+          // backgrounds. It still scrolls within this container so ScrollProgress can track it.
+          <div ref={scrollRef} className="h-full w-full overflow-y-auto">
+            <div className="animate-fade-in">
+              <Outlet />
+            </div>
           </div>
         ) : (
           // Every other route: scroll within a centred max-width column. The only scroll cue is
