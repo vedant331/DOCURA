@@ -14,6 +14,7 @@ from app.api.chat import router as chat_router
 from app.api.documents import router as documents_router
 from app.api.form_sessions import router as form_sessions_router
 from app.api.health import router as health_router
+from app.api.internal import router as internal_router
 from app.api.record import router as record_router
 from app.api.search import router as search_router
 from app.api.users import router as users_router
@@ -31,7 +32,9 @@ from app.db.session import (
     dispose_engine,
     verify_connection,
 )
+from app.services.classification import build_document_classifier
 from app.services.extraction import build_document_extractor
+from app.services.field_extraction import build_field_extractor
 from app.services.reset_delivery import build_delivery_channel
 from app.services.storage import build_document_storage
 
@@ -111,6 +114,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # held-out evaluation AR-AST-008 requires, so what is installed here is an
     # extractor that refuses honestly rather than one that invents results.
     app.state.document_extractor = build_document_extractor(settings)
+    # The remaining two seams the processing pipeline drives (D-02 classification, and
+    # field extraction). The long-running worker (app.worker) builds these for itself;
+    # they are placed on app.state as well so the serverless trigger (POST
+    # /internal/process) drives the exact same process_one with the same dependencies.
+    # Both abstain today and only run on the extractor's success path.
+    app.state.document_classifier = build_document_classifier()
+    app.state.document_field_extractor = build_field_extractor(settings)
 
     # Middleware runs bottom-up: the request context is outermost so that a
     # request ID exists before any other layer can log or reject.
@@ -140,6 +150,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(search_router)
     app.include_router(form_sessions_router)
     app.include_router(chat_router)
+    app.include_router(internal_router)
 
     return app
 

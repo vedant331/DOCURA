@@ -200,6 +200,13 @@ class Settings(BaseSettings):
     # A claim older than this is treated as abandoned and may be reclaimed, so a
     # worker that died mid-job does not strand its document (NFR-REL-002).
     worker_claim_timeout_seconds: Annotated[int, Field(ge=1, le=3_600)] = 300
+    # Shared secret that authenticates the serverless processing trigger
+    # (POST /internal/process). The long-running `app.worker` poll loop cannot run on a
+    # serverless host (Vercel), so an out-of-band scheduler calls that endpoint instead;
+    # it drives the *same* process_one, so the queue architecture is unchanged. Unset =
+    # the endpoint is disabled and fails closed (503). A backend-only secret: never a
+    # VITE_ variable, never committed.
+    worker_trigger_secret: SecretStr | None = None
 
     # -- HTTP -----------------------------------------------------------------
     cors_allow_origins: tuple[str, ...] = ()
