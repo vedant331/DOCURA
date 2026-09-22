@@ -272,7 +272,9 @@ def test_configured_cmd_and_tessdata_reach_the_engine_call(
             DICT = "dict"
 
         @staticmethod
-        def image_to_data(image: object, *, lang: str, config: str, output_type: str) -> dict:
+        def image_to_data(
+            image: object, *, lang: str, config: str, output_type: str
+        ) -> dict[str, list[str]]:
             captured["cmd"] = _FakePytesseract.pytesseract.tesseract_cmd
             captured["lang"] = lang
             captured["config"] = config
