@@ -240,6 +240,28 @@ class Settings(BaseSettings):
             raise ValueError(msg)
         return value
 
+    @field_validator("supabase_url")
+    @classmethod
+    def _normalise_supabase_url(cls, value: str) -> str:
+        """Clean paste artifacts and reject a URL httpx cannot use.
+
+        This value is pasted into a deployment's env field by hand, so it can arrive
+        wrapped in quotes or padded with whitespace or a trailing newline. Left as-is
+        it becomes the httpx ``base_url`` in :class:`SupabaseStorage` with no usable
+        scheme, and the failure surfaces only on the first upload as
+        ``httpx.UnsupportedProtocol`` — swallowed into an opaque 503 with a request id
+        rather than raised here. Stripping heals the common artifacts; a genuinely
+        scheme-less value fails loudly at startup, naming the variable instead.
+
+        Empty stays empty: an unset URL selects LocalFileStorage for local and test
+        runs, and must not be forced to carry a scheme it will never use.
+        """
+        cleaned = value.strip().strip("\"'").strip()
+        if cleaned and not cleaned.startswith(("http://", "https://")):
+            msg = "supabase_url must start with http:// or https://"
+            raise ValueError(msg)
+        return cleaned
+
     # -- Derived --------------------------------------------------------------
     @property
     def async_database_url(self) -> str:

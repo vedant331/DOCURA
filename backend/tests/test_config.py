@@ -66,6 +66,32 @@ class TestValidation:
                 cors_allow_origins=("https://app.docura.test", "*"),
             )
 
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            ("  https://ref.supabase.co  ", "https://ref.supabase.co"),
+            ('"https://ref.supabase.co"', "https://ref.supabase.co"),
+            ("'https://ref.supabase.co'", "https://ref.supabase.co"),
+            ("https://ref.supabase.co\n", "https://ref.supabase.co"),
+            ("", ""),
+        ],
+    )
+    def test_supabase_url_paste_artifacts_are_cleaned(self, raw: str, expected: str) -> None:
+        """Quotes/whitespace/newline that would yield a scheme-less httpx base_url
+        (httpx.UnsupportedProtocol on upload) are stripped so the URL stays usable."""
+        loaded = Settings(
+            environment=Environment.TEST, database_url=TEST_DSN, supabase_url=raw
+        )
+        assert loaded.supabase_url == expected
+
+    @pytest.mark.parametrize("bad", ["ref.supabase.co", "ftp://ref.supabase.co"])
+    def test_supabase_url_without_http_scheme_is_rejected(self, bad: str) -> None:
+        """A scheme-less URL fails loudly at startup, not as an opaque per-request 503."""
+        with pytest.raises(ValidationError, match="http"):
+            Settings(
+                environment=Environment.TEST, database_url=TEST_DSN, supabase_url=bad
+            )
+
     def test_rejects_unknown_docura_variable(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A typo must fail startup, not silently leave a default in place."""
         monkeypatch.setenv("DOCURA_DATABASE_URL", TEST_DSN)
