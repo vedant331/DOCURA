@@ -116,6 +116,15 @@ class Settings(BaseSettings):
     # DEV/EVALUATION opt-in (DOCURA_OCR_ENGINE=tesseract) for local technical testing of the
     # candidate through the normal pipeline; it does NOT select Tesseract for production.
     ocr_engine: OcrEngine = OcrEngine.UNCONFIGURED
+    # Where the Tesseract candidate (DOCURA_OCR_ENGINE=tesseract, dev/demo only) finds its
+    # runtime. These do nothing unless that engine is selected; the default stays the
+    # unconfigured extractor. On a serverless host with no system Tesseract, point
+    # `tesseract_cmd` at the bundled binary's absolute path (so PATH is never relied on) and
+    # `tesseract_tessdata_dir` at the bundled tessdata directory. Both None = use PATH and the
+    # engine's default tessdata (the normal local-development posture). Paths, not secrets.
+    tesseract_cmd: str | None = None
+    tesseract_tessdata_dir: str | None = None
+    tesseract_languages: str = "eng"
 
     # -- Dynamic demo mode (DEV/EVALUATION only) ------------------------------
     # When true (DOCURA_DEMO_MODE=true), the field extractor uses the DEMO synonym vocabulary

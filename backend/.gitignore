@@ -16,3 +16,7 @@ var/
 # Raw personal documents staged for S-6 evaluation intake. Real identity documents
 # (Aadhaar/PAN/marksheets, etc.) land here; they must never reach version control.
 s6_sources/
+
+# Tesseract DEMO runtime provisioned at build time by build.py (native binary, shared libs,
+# tessdata, and OCR pip deps). Fetched during the Vercel build — never committed.
+vendor/

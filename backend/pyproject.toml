@@ -48,6 +48,13 @@ build-backend = "setuptools.build_meta"
 [tool.vercel]
 entrypoint = "server:app"
 
+# DEMO only: provisions the Tesseract candidate's runtime (native binary + libs + tessdata) and
+# its OCR Python deps into backend/vendor/ during the Vercel build (see build.py). Inert unless
+# DOCURA_OCR_ENGINE=tesseract; it selects nothing for production and declares no OCR dependency
+# in [project] (tests/test_extraction.py forbids that).
+[tool.vercel.scripts]
+build = "python build.py"
+
 [tool.setuptools.packages.find]
 include = ["app*"]
 

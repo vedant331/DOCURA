@@ -27,6 +27,7 @@ from ocr_candidates.tesseract_adapter import (
     Word,
     WordReader,
     _words_from_tsv_dict,
+    build_tesseract_extractor,
     result_from_words,
 )
 
@@ -226,6 +227,90 @@ def test_production_builder_still_returns_the_unconfigured_extractor(tmp_path: P
     extractor = build_document_extractor(_settings(tmp_path))
     assert extractor.name == "unconfigured"
     assert extractor.is_available() is False
+
+
+# --------------------------------------------------- bundled-runtime configuration (demo)
+def test_the_builder_threads_runtime_paths_from_settings(tmp_path: Path) -> None:
+    # A bundled/serverless deployment points the candidate at an absolute binary and tessdata
+    # dir via settings; the builder must pass them through rather than relying on PATH.
+    settings = Settings(
+        environment=Environment.TEST,
+        database_url="postgresql://u:p@localhost:5432/none",
+        document_storage_root=tmp_path / "documents",
+        tesseract_cmd="/var/task/vendor/tesseract/bin/tesseract",
+        tesseract_tessdata_dir="/var/task/vendor/tesseract/tessdata",
+        tesseract_languages="eng",
+    )
+    extractor = build_tesseract_extractor(settings)
+    assert extractor._cmd == "/var/task/vendor/tesseract/bin/tesseract"
+    assert extractor._tessdata_dir == "/var/task/vendor/tesseract/tessdata"
+    assert extractor._languages == "eng"
+
+
+def test_defaults_use_path_and_default_tessdata() -> None:
+    # Local dev posture: nothing configured → no absolute paths forced onto Tesseract.
+    extractor = TesseractExtractor()
+    assert extractor._cmd is None
+    assert extractor._tessdata_dir is None
+    assert extractor._languages == "eng"
+
+
+def test_configured_cmd_and_tessdata_reach_the_engine_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The only place PATH-independence matters: the real reader must set tesseract_cmd and pass
+    # --tessdata-dir so a bundled runtime is found. Capture the pytesseract call with a fake.
+    captured: dict[str, object] = {}
+
+    class _FakeInner:
+        tesseract_cmd = ""
+
+    class _FakePytesseract:
+        pytesseract = _FakeInner()
+
+        class Output:
+            DICT = "dict"
+
+        @staticmethod
+        def image_to_data(image: object, *, lang: str, config: str, output_type: str) -> dict:
+            captured["cmd"] = _FakePytesseract.pytesseract.tesseract_cmd
+            captured["lang"] = lang
+            captured["config"] = config
+            return {
+                "text": ["Hi"], "conf": ["90"], "left": ["0"], "top": ["0"],
+                "width": ["10"], "height": ["10"],
+                "block_num": ["1"], "par_num": ["1"], "line_num": ["1"],
+            }
+
+    monkeypatch.setitem(sys.modules, "pytesseract", _FakePytesseract)
+
+    class _FakeImage:
+        size = (100, 50)
+
+        def load(self) -> None: ...
+
+        def close(self) -> None: ...
+
+    class _FakePIL:
+        class UnidentifiedImageError(Exception): ...
+
+        class Image:
+            @staticmethod
+            def open(_source: object) -> _FakeImage:
+                return _FakeImage()
+
+    monkeypatch.setitem(sys.modules, "PIL", _FakePIL)
+
+    extractor = TesseractExtractor(
+        tesseract_cmd="/abs/tesseract",
+        tessdata_dir="/abs/tessdata",
+        languages="eng",
+    )
+    result = extractor.extract(io.BytesIO(b"x"), content_type=PNG)
+    assert result.text == "Hi"
+    assert captured["cmd"] == "/abs/tesseract"
+    assert captured["lang"] == "eng"
+    assert captured["config"] == '--tessdata-dir "/abs/tessdata"'
 
 
 # ------------------------------------------------------------------- M19 harness smoke test

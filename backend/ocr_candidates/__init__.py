@@ -18,3 +18,17 @@ Selection remains BLOCKED on S-6 (see ``backend/docs/SPRINT_4_M14_S6_OCR_EVALUAT
 and ``SPRINT_4_M20_OCR_CANDIDATE_ADAPTER.md``): a working adapter is not evidence that
 this engine is good enough, only that the seam can carry a real one.
 """
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+# Serverless/demo builds (see ``backend/build.py``) install this package's OCR dependencies
+# (pytesseract, Pillow, pypdfium2) into ``backend/vendor/pydeps`` rather than the app
+# environment — that keeps them out of ``pyproject.toml`` (tests/test_extraction.py forbids an
+# OCR engine as a declared dependency). Put that dir on the import path here, before any lazy
+# ``import pytesseract`` in the adapter/rasterizer. Absent on a normal dev checkout: a no-op.
+_pydeps = Path(__file__).resolve().parent.parent / "vendor" / "pydeps"
+if _pydeps.is_dir() and str(_pydeps) not in sys.path:
+    sys.path.insert(0, str(_pydeps))

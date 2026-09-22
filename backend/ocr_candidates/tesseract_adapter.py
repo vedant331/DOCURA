@@ -27,7 +27,9 @@ Design:
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable, Sequence
+from pathlib import Path
 from typing import TYPE_CHECKING, BinaryIO, NamedTuple
 
 from app.core.errors import DocumentExtractionError
@@ -73,6 +75,24 @@ class ImageWords(NamedTuple):
 # test/rasterizer seams, not a second extraction abstraction.
 WordReader = Callable[[BinaryIO, str], ImageWords]
 PageReader = Callable[[BinaryIO], list[ImageWords]]
+
+
+def _ensure_lib_path(cmd: str) -> None:
+    """Put a bundled binary's sibling ``lib`` dir on ``LD_LIBRARY_PATH`` before it is spawned.
+
+    A serverless deployment ships Tesseract as ``<base>/bin/tesseract`` with its shared objects
+    in ``<base>/lib`` (the AL2023 layer layout). pytesseract spawns the binary via subprocess,
+    which inherits ``os.environ``; without its libs on the loader path the exec fails. No-op when
+    the sibling ``lib`` is absent (a system/PATH install needs nothing).
+    """
+    # ponytail: assumes the bundle's bin/ and lib/ are siblings; only acts if that lib/ exists.
+    lib = os.path.join(os.path.dirname(os.path.dirname(cmd)), "lib")
+    if not os.path.isdir(lib):
+        return
+    current = os.environ.get("LD_LIBRARY_PATH", "")
+    parts = current.split(os.pathsep) if current else []
+    if lib not in parts:
+        os.environ["LD_LIBRARY_PATH"] = os.pathsep.join([lib, *parts])
 
 
 def _fraction(value: int, extent: int) -> float:
@@ -145,7 +165,9 @@ def result_from_pages(
     )
 
 
-def _run_tesseract_on_image(image: object, *, cmd: str | None, languages: str) -> ImageWords:
+def _run_tesseract_on_image(
+    image: object, *, cmd: str | None, languages: str, tessdata_dir: str | None
+) -> ImageWords:
     """Run Tesseract on an already-open PIL image. The only place ``pytesseract`` is imported."""
     try:
         import pytesseract
@@ -158,11 +180,16 @@ def _run_tesseract_on_image(image: object, *, cmd: str | None, languages: str) -
 
     if cmd:
         pytesseract.pytesseract.tesseract_cmd = cmd
+        _ensure_lib_path(cmd)
+
+    # A bundled runtime (serverless: no system tessdata) needs the language data located
+    # explicitly; on PATH-based local dev tessdata_dir is None and Tesseract uses its default.
+    config = f'--tessdata-dir "{tessdata_dir}"' if tessdata_dir else ""
 
     try:
         width, height = image.size  # type: ignore[attr-defined]
         data = pytesseract.image_to_data(
-            image, lang=languages, output_type=pytesseract.Output.DICT
+            image, lang=languages, config=config, output_type=pytesseract.Output.DICT
         )
     except Exception as exc:  # pytesseract raises many engine-specific errors; treat as one
         # No document content or engine internals are put in the message (NFR-ERR-004).
@@ -181,6 +208,7 @@ def _read_words_with_tesseract(
     *,
     cmd: str | None,
     languages: str,
+    tessdata_dir: str | None,
 ) -> ImageWords:
     """Open one image and OCR it. Honest failure on a missing dep or an unreadable image."""
     try:
@@ -202,7 +230,9 @@ def _read_words_with_tesseract(
         ) from exc
 
     try:
-        return _run_tesseract_on_image(image, cmd=cmd, languages=languages)
+        return _run_tesseract_on_image(
+            image, cmd=cmd, languages=languages, tessdata_dir=tessdata_dir
+        )
     finally:
         image.close()
 
@@ -212,13 +242,17 @@ def _read_pages_with_tesseract(
     *,
     cmd: str | None,
     languages: str,
+    tessdata_dir: str | None,
     scale: float,
 ) -> list[ImageWords]:
     """Rasterize a PDF locally, then OCR each page. Page images are closed deterministically."""
     images = rasterize_pdf(source, scale=scale)
     try:
         return [
-            _run_tesseract_on_image(image, cmd=cmd, languages=languages) for image in images
+            _run_tesseract_on_image(
+                image, cmd=cmd, languages=languages, tessdata_dir=tessdata_dir
+            )
+            for image in images
         ]
     finally:
         for image in images:
@@ -323,6 +357,7 @@ class TesseractExtractor:
         *,
         tesseract_cmd: str | None = None,
         languages: str = "eng",
+        tessdata_dir: str | None = None,
         pdf_scale: float = DEFAULT_SCALE,
         word_reader: WordReader | None = None,
         page_reader: PageReader | None = None,
@@ -332,9 +367,21 @@ class TesseractExtractor:
         # binary/renderer installed. An injected reader also marks the adapter "available".
         self._cmd = tesseract_cmd
         self._languages = languages
+        self._tessdata_dir = tessdata_dir
         self._pdf_scale = pdf_scale
         self._word_reader = word_reader
         self._page_reader = page_reader
+
+    def _configure_binary(self, pytesseract: object) -> None:
+        """Point pytesseract at the configured absolute binary and its libs (bundled runtime).
+
+        Version/availability probes spawn the binary directly, so they must honour the same
+        cmd + ``LD_LIBRARY_PATH`` as extraction, or a bundled deployment (no PATH tesseract)
+        would report itself unavailable and the engine would be refused at startup.
+        """
+        if self._cmd:
+            pytesseract.pytesseract.tesseract_cmd = self._cmd  # type: ignore[attr-defined]
+            _ensure_lib_path(self._cmd)
 
     @property
     def version(self) -> str:
@@ -343,6 +390,7 @@ class TesseractExtractor:
         try:
             import pytesseract
 
+            self._configure_binary(pytesseract)
             return str(pytesseract.get_tesseract_version())
         except Exception:  # not installed / binary missing — the version is simply unknown
             return "unknown"
@@ -353,6 +401,7 @@ class TesseractExtractor:
         try:
             import pytesseract
 
+            self._configure_binary(pytesseract)
             pytesseract.get_tesseract_version()
         except Exception:
             return False
@@ -374,20 +423,57 @@ class TesseractExtractor:
 
     def _default_image_reader(self, source: BinaryIO, content_type: str) -> ImageWords:
         return _read_words_with_tesseract(
-            source, content_type, cmd=self._cmd, languages=self._languages
+            source,
+            content_type,
+            cmd=self._cmd,
+            languages=self._languages,
+            tessdata_dir=self._tessdata_dir,
         )
 
     def _default_pdf_reader(self, source: BinaryIO) -> list[ImageWords]:
         return _read_pages_with_tesseract(
-            source, cmd=self._cmd, languages=self._languages, scale=self._pdf_scale
+            source,
+            cmd=self._cmd,
+            languages=self._languages,
+            tessdata_dir=self._tessdata_dir,
+            scale=self._pdf_scale,
         )
 
 
-def build_tesseract_extractor(settings: Settings) -> TesseractExtractor:
-    """Construct the Tesseract candidate adapter for evaluation/dev use.
+def _bundled_runtime_paths() -> tuple[str, str] | None:
+    """Absolute paths to a Tesseract bundle shipped beside this package, or ``None``.
 
-    ``settings`` is accepted to match the engine-builder shape (and to allow future
-    engine configuration to be read from it); it selects nothing in production.
+    A serverless build (see ``build.py``) drops the AL2023 layer into
+    ``backend/vendor/tesseract/`` — ``bin/tesseract`` + ``tesseract/share/tessdata``. Resolving
+    from ``__file__`` yields an absolute path that is correct at any deployment root (never a
+    hardcoded ``/var/task``) and needs no PATH. Returns ``None`` on a normal dev checkout, where
+    the system/PATH Tesseract is used instead.
     """
-    _ = settings
-    return TesseractExtractor()
+    base = Path(__file__).resolve().parent.parent / "vendor" / "tesseract"
+    binary = base / "bin" / "tesseract"
+    tessdata = base / "tesseract" / "share" / "tessdata"
+    if binary.is_file() and tessdata.is_dir():
+        return str(binary), str(tessdata)
+    return None
+
+
+def build_tesseract_extractor(settings: Settings) -> TesseractExtractor:
+    """Construct the Tesseract candidate adapter for evaluation/dev/demo use.
+
+    Runtime location resolution, in order: an explicit ``settings.tesseract_cmd`` /
+    ``tesseract_tessdata_dir`` override wins; otherwise a bundled runtime shipped beside this
+    package is auto-discovered (the serverless/demo posture); otherwise both stay ``None`` and
+    the system/PATH Tesseract is used (local dev). ``tesseract_languages`` always applies. This
+    selects nothing in production — the engine only runs when ``DOCURA_OCR_ENGINE=tesseract``.
+    """
+    cmd = settings.tesseract_cmd
+    tessdata_dir = settings.tesseract_tessdata_dir
+    if cmd is None and tessdata_dir is None:
+        bundled = _bundled_runtime_paths()
+        if bundled is not None:
+            cmd, tessdata_dir = bundled
+    return TesseractExtractor(
+        tesseract_cmd=cmd,
+        languages=settings.tesseract_languages,
+        tessdata_dir=tessdata_dir,
+    )
