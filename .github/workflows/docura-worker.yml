@@ -1,0 +1,39 @@
+name: DOCURA Worker
+
+# Drains the DOCURA processing queue by calling the serverless trigger endpoint.
+# The long-running app.worker poll loop cannot run on Vercel, so this scheduled
+# job is the external periodic caller for POST /internal/process.
+on:
+  schedule:
+    - cron: "*/5 * * * *"   # every 5 minutes (UTC)
+  workflow_dispatch: {}       # manual runs for testing
+
+permissions:
+  contents: read
+
+# Never let two runs overlap; process_one is concurrency-safe, but one caller at a
+# time keeps logs clean and avoids piling up runners if a run is slow.
+concurrency:
+  group: docura-worker
+  cancel-in-progress: false
+
+jobs:
+  drain-queue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger processing endpoint
+        env:
+          WORKER_SECRET: ${{ secrets.DOCURA_WORKER_TRIGGER_SECRET }}
+        run: |
+          set -euo pipefail
+          status=$(curl -sS -m 60 -o response.json -w '%{http_code}' \
+            -X POST 'https://docura-nine.vercel.app/internal/process' \
+            -H "X-Internal-Secret: ${WORKER_SECRET}") || status="000"
+          echo "HTTP status: ${status}"
+          echo "Response body:"
+          cat response.json 2>/dev/null || echo "(no response body)"
+          echo
+          case "${status}" in
+            2*) echo "Worker trigger succeeded." ;;
+            *)  echo "Worker trigger failed with HTTP ${status}." >&2; exit 1 ;;
+          esac
