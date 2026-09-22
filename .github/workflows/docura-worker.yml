@@ -7,6 +7,8 @@ on:
   schedule:
     - cron: "*/5 * * * *"   # every 5 minutes (UTC)
   workflow_dispatch: {}       # manual runs for testing
+  push:
+    branches: [main]          # TEMP: deterministic drain to verify the Tesseract demo E2E
 
 permissions:
   contents: read
