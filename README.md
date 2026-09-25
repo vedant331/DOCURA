@@ -1,53 +1,103 @@
-# DOCURA
-
-## Document Understanding and Assistance System
-
-DOCURA is a document assistance prototype designed to help users upload documents, process their content, and extract selected information that can later be used to assist with supported web forms.
-
-The project focuses on reducing repetitive document-to-form work while keeping the user in control. DOCURA does **not** submit forms automatically.
-
-> **Current status:** DOCURA is currently a working prototype demonstrated on **test/synthetic documents**. It should not be considered a fully validated real-world document processing system.
-
----
-
 ## 1. Project Overview
 
-DOCURA provides a workflow where a user can:
+DOCURA is a document assistance prototype designed to help users upload documents, process their content, extract selected information, and assist with supported web-form workflows.
 
-1. Create an account / sign in.
-2. Upload a document.
-3. Store the uploaded document.
-4. Add the document to a processing queue.
-5. Process the document using OCR.
-6. Extract selected fields from the document.
-7. View the extracted information.
-8. Use the extracted information as assistance for supported web-form workflows.
-9. Review information before using it.
-10. Submit the final form manually.
-
-The main purpose of DOCURA is to assist users with repetitive information entry while maintaining user control over the final action.
+The system is designed to reduce repetitive document-to-form work while keeping the user in control. DOCURA assists the user with information but does not submit forms automatically.
 
 ---
 
-## 2. Current Project Status
+## 2. Completed Project Scope
 
-### Working
+The DOCURA prototype includes:
 
-The following workflow has been successfully demonstrated:
+- User registration and authentication
+- Document upload
+- Document storage
+- Document processing queue
+- Background document processing
+- Tesseract OCR integration
+- Field extraction
+- User record
+- Extracted-field display
+- Source/provenance information
+- Original document viewing and downloading
+- Browser extension workflow
+- Backend APIs
+- Database integration
+- Supabase Storage integration
+- Production deployment
+- Worker processing mechanism
+- Search and export functionality
+- Account management
+
+---
+
+## 3. Document Processing
+
+The document processing workflow is:
 
 ```text
-Sign In
-   ↓
-Upload Test Document
-   ↓
-Store Document
-   ↓
+Document Upload
+      ↓
+Document Storage
+      ↓
 Processing Queue
-   ↓
+      ↓
 Worker
-   ↓
+      ↓
 Tesseract OCR
-   ↓
+      ↓
+OCR Text
+      ↓
 Field Extraction
-   ↓
-View Extracted Information
+      ↓
+User Record
+
+                    ┌─────────────────────┐
+                    │       User          │
+                    └──────────┬──────────┘
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │   DOCURA Frontend   │
+                    │ React + TypeScript  │
+                    │       + Vite        │
+                    └──────────┬──────────┘
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │   DOCURA Backend    │
+                    │       FastAPI       │
+                    └──────┬──────┬───────┘
+                           │      │
+                  ┌────────┘      └─────────┐
+                  ▼                         ▼
+        ┌───────────────────┐     ┌──────────────────┐
+        │ PostgreSQL /      │     │ Supabase Storage │
+        │ Supabase Database │     │                  │
+        └───────────────────┘     └──────────────────┘
+                           │
+                           ▼
+                    ┌─────────────────┐
+                    │ Processing Queue│
+                    └────────┬────────┘
+                             │
+                             ▼
+                    ┌─────────────────┐
+                    │ Worker Trigger  │
+                    └────────┬────────┘
+                             │
+                             ▼
+                    ┌─────────────────┐
+                    │ Tesseract OCR   │
+                    └────────┬────────┘
+                             │
+                             ▼
+                    ┌─────────────────┐
+                    │ Field Extraction│
+                    └────────┬────────┘
+                             │
+                             ▼
+                    ┌─────────────────┐
+                    │ User Record     │
+                    └─────────────────┘
