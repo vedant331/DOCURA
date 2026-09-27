@@ -134,6 +134,17 @@ def _normalize(text: str) -> str:
     return re.sub(r"\s+", " ", text.lower()).strip()
 
 
+# Phrase matching is word-boundary-aware, not raw substring: a rule for "hi" must match "hi"
+# and "hi there" but NOT "this"/"which"/"while", so an ordinary follow-up that merely contains a
+# rule's characters is left UNKNOWN and the active task can be inherited. Compiled once from the
+# data-driven ``_RULES`` above (control flow unchanged) — ``\b`` anchors each phrase to word
+# boundaries while spaces inside a multi-word phrase still match normally.
+_COMPILED_RULES: list[tuple[TaskType, tuple[tuple[str, re.Pattern[str]], ...]]] = [
+    (task, tuple((phrase, re.compile(rf"\b{re.escape(phrase)}\b")) for phrase in phrases))
+    for task, phrases in _RULES
+]
+
+
 class DeterministicIntentProvider:
     """Transparent keyword/phrase classifier. No LLM, no network. It reports which phrase it
     matched (``reason``) so its decision is always inspectable, and returns ``UNKNOWN`` when it
@@ -143,8 +154,8 @@ class DeterministicIntentProvider:
 
     def classify(self, message: str, *, history: list[str] | None = None) -> Intent:
         text = _normalize(message)
-        for task, phrases in _RULES:
-            hit = next((p for p in phrases if p in text), None)
+        for task, phrases in _COMPILED_RULES:
+            hit = next((phrase for phrase, pattern in phrases if pattern.search(text)), None)
             if hit is None:
                 continue
             entities: dict[str, str] = {}
