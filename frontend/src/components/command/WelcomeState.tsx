@@ -5,10 +5,16 @@ import { cn } from "@/lib/utils";
 // Centered welcome shown when a conversation is empty. No fake conversation is rendered —
 // just an honest, premium entry point with useful suggested actions.
 
+// The backend TaskType a quick-action starts. Sent alongside the prompt so the orchestrator
+// runs the intended workflow directly instead of re-classifying the text (which could fall
+// through to a generic reply). Free-text messages send no action.
+export type QuickAction = "ask_requirements" | "check_readiness" | "fill_form" | "check_documents";
+
 export interface Suggestion {
   label: string;
   hint: string;
   prompt: string;
+  action: QuickAction;
   Icon: LucideIcon;
 }
 
@@ -17,33 +23,43 @@ export const SUGGESTIONS: Suggestion[] = [
     label: "Find required documents",
     hint: "See what a typical application needs and what you already have.",
     prompt: "What documents do I need, and which do I already have?",
+    action: "ask_requirements",
     Icon: FileSearch,
   },
   {
     label: "Check my application",
     hint: "Review which of your details are ready, missing, or need approval.",
     prompt: "Which of my details are ready, missing, or need review?",
+    action: "check_readiness",
     Icon: ClipboardCheck,
   },
   {
     label: "Fill a form",
     hint: "Learn how DOCURA fills forms safely with your record.",
     prompt: "How does DOCURA fill a form using my documents?",
+    action: "fill_form",
     Icon: PenLine,
   },
   {
     label: "Review my documents",
     hint: "Summarise what DOCURA has read from your documents.",
     prompt: "Summarise what DOCURA has read from my documents.",
+    action: "check_documents",
     Icon: FolderCheck,
   },
 ];
 
-function SuggestionCard({ s, onSelect }: { s: Suggestion; onSelect: (prompt: string) => void }) {
+function SuggestionCard({
+  s,
+  onSelect,
+}: {
+  s: Suggestion;
+  onSelect: (prompt: string, action: QuickAction) => void;
+}) {
   return (
     <button
       type="button"
-      onClick={() => onSelect(s.prompt)}
+      onClick={() => onSelect(s.prompt, s.action)}
       className={cn(
         "group flex items-start gap-3 rounded-2xl border border-white/8 bg-white/[0.02] p-4 text-left",
         "transition-all duration-300 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.05]",
@@ -61,7 +77,11 @@ function SuggestionCard({ s, onSelect }: { s: Suggestion; onSelect: (prompt: str
   );
 }
 
-export function WelcomeState({ onSelect }: { onSelect: (prompt: string) => void }) {
+export function WelcomeState({
+  onSelect,
+}: {
+  onSelect: (prompt: string, action: QuickAction) => void;
+}) {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col items-center px-2 py-10 text-center animate-fade-in">
       <div className="chat-aura pointer-events-none absolute inset-x-0 top-0 h-64" aria-hidden />

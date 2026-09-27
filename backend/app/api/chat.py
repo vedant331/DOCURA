@@ -36,6 +36,26 @@ def _to_conversation(row: ConversationModel) -> ConversationResponse:
     )
 
 
+def _latest_task_type(messages: list[ConversationMessage]) -> str | None:
+    """The task recorded by the most recent assistant reply (chronological input), or ``None``.
+
+    Used to carry an in-progress quick-action task across turns. Reads only the structured
+    ``data.task.task_type`` the orchestrator itself wrote — never message content — so no
+    document or record value is inspected here.
+    """
+    for row in reversed(messages):
+        if row.role is not ConversationMessageRole.ASSISTANT:
+            continue
+        data = row.data
+        if isinstance(data, dict):
+            task = data.get("task")
+            if isinstance(task, dict):
+                value = task.get("task_type")
+                return value if isinstance(value, str) else None
+        return None
+    return None
+
+
 def _to_message(row: ConversationMessage) -> MessageResponse:
     return MessageResponse(
         id=row.id,
@@ -116,6 +136,11 @@ async def send_message(
     # Bounded and text-only — never structured data or sensitive values.
     prior = await conversations.list_messages(db, conversation=conversation, limit=12, offset=0)
     history = [m.content for m in prior if m.content]
+    # The active task carries over between turns: it is the task the most recent assistant reply
+    # recorded. The orchestrator only continues it for quick-action tasks (and a cancel/general
+    # reply, being non-continuable, naturally ends it), so a follow-up like "Passport application"
+    # stays with the task the user selected instead of being re-classified in isolation.
+    active_task_type = _latest_task_type(prior)
     user_message = await conversations.add_message(
         db,
         conversation=conversation,
@@ -124,7 +149,12 @@ async def send_message(
         message_type=ConversationMessageType.TEXT,
     )
     turn = await build_orchestrator(settings).handle(
-        db, user_id=user.id, message=payload.content, history=history
+        db,
+        user_id=user.id,
+        message=payload.content,
+        history=history,
+        task_type=payload.task_type,
+        active_task_type=active_task_type,
     )
     assistant_message = await conversations.add_message(
         db,

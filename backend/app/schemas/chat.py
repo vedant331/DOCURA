@@ -50,6 +50,11 @@ class MessageCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     content: str = Field(min_length=1, max_length=MESSAGE_MAX_LENGTH)
+    # Optional task hint from a UI quick-action (e.g. "ask_requirements"). When present and
+    # recognised, the orchestrator runs that task directly instead of classifying the text, so a
+    # quick-action card always starts its intended workflow. Free-text messages omit it. An
+    # unrecognised value is ignored (the orchestrator falls back to classification).
+    task_type: str | None = Field(default=None, max_length=40)
 
 
 class MessageResponse(BaseModel):

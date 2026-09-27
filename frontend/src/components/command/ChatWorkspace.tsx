@@ -30,6 +30,7 @@ export function ChatWorkspace() {
   const [initNonce, setInitNonce] = useState(0);
   const streamRef = useRef<HTMLDivElement>(null);
   const lastText = useRef<string>("");
+  const lastTaskType = useRef<string | undefined>(undefined);
 
   // A rejected token means the session ended — return to sign-in (fail toward inaction).
   const handleAuthExpiry = useCallback(
@@ -85,10 +86,11 @@ export function ChatWorkspace() {
   // Send a message through the backend. `echo` adds the optimistic user bubble; a retry of a
   // failed send reuses the bubble already on screen and passes echo=false.
   const send = useCallback(
-    async (text: string, echo = true) => {
+    async (text: string, echo = true, taskType?: string) => {
       if (pending) return;
       setSendError(null);
       lastText.current = text;
+      lastTaskType.current = taskType;
       if (echo) setMessages((prev) => [...prev, userMessage(text)]);
       setPending(true);
       try {
@@ -98,7 +100,7 @@ export function ChatWorkspace() {
           id = created.id;
           setConversationId(id);
         }
-        const turn = await api.sendMessage(id, text);
+        const turn = await api.sendMessage(id, text, taskType);
         setMessages((prev) => [...prev, toAssistantMessage(turn.assistant_message)]);
       } catch (err) {
         handleAuthExpiry(err);
@@ -142,7 +144,7 @@ export function ChatWorkspace() {
       {/* Message stream (or the welcome state when empty). */}
       <div ref={streamRef} className="chat-scroll relative flex-1 overflow-y-auto px-4 sm:px-6">
         {empty ? (
-          <WelcomeState onSelect={send} />
+          <WelcomeState onSelect={(prompt, action) => void send(prompt, true, action)} />
         ) : (
           <div className="mx-auto max-w-3xl space-y-5 py-6">
             {messages.map((m) => (
@@ -173,7 +175,7 @@ export function ChatWorkspace() {
               <span>{sendError}</span>
               <button
                 type="button"
-                onClick={() => send(lastText.current, false)}
+                onClick={() => send(lastText.current, false, lastTaskType.current)}
                 className="shrink-0 font-medium text-foreground underline-offset-2 hover:underline"
               >
                 Try again

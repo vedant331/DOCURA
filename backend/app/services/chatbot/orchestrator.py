@@ -10,6 +10,7 @@ Every reply is a structured :class:`AssistantTurn` the API persists and the clie
 from __future__ import annotations
 
 import asyncio
+import re
 import uuid
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any
@@ -36,6 +37,50 @@ class AssistantTurn:
     message: str
     message_type: ConversationMessageType
     data: dict[str, Any]
+
+
+# Quick-action task hints the UI may send. Restricted to the user-initiable workflows so a hint
+# can never force an internal-only task; anything else is ignored (falls back to classification).
+_QUICK_ACTION_TASKS = frozenset(
+    {
+        TaskType.ASK_REQUIREMENTS,
+        TaskType.CHECK_DOCUMENTS,
+        TaskType.CHECK_READINESS,
+        TaskType.FILL_FORM,
+    }
+)
+
+
+def _coerce_task_type(task_type: str | None) -> TaskType | None:
+    """A recognised quick-action task, or ``None`` to leave classification in charge."""
+    if not task_type:
+        return None
+    try:
+        task = TaskType(task_type)
+    except ValueError:
+        return None
+    return task if task in _QUICK_ACTION_TASKS else None
+
+
+# Phrases that end an in-progress task and return to normal chat. Matched only when a task is
+# actually active, so they never interfere with ordinary conversation.
+_CANCEL_PHRASES: tuple[str, ...] = (
+    "cancel",
+    "never mind",
+    "nevermind",
+    "forget it",
+    "stop that",
+    "stop this",
+    "start over",
+    "reset",
+    "different question",
+    "something else",
+)
+
+
+def _is_cancel(message: str) -> bool:
+    text = re.sub(r"\s+", " ", message.lower()).strip()
+    return any(p in text for p in _CANCEL_PHRASES)
 
 
 def _task_block(intent: Intent) -> dict[str, Any]:
@@ -67,9 +112,44 @@ class TaskOrchestrator:
         user_id: uuid.UUID,
         message: str,
         history: list[str] | None = None,
+        task_type: str | None = None,
+        active_task_type: str | None = None,
     ) -> AssistantTurn:
         # classify may do blocking network I/O (LLM provider); keep the event loop free.
         intent = await asyncio.to_thread(self._intent.classify, message, history=history)
+        # Task resolution, in priority order. This changes ROUTING only — every handler below is
+        # unchanged, so grounding, "ask don't guess", conflict surfacing, sensitivity/approval,
+        # and never-submit all still hold regardless of how the task was chosen.
+        #
+        # 1. Explicit quick-action hint (a card click) always wins and (re)sets the active task.
+        # 2. Otherwise, if a quick-action task is already active for this conversation:
+        #      - an explicit cancel phrase clears it and returns to normal chat;
+        #      - a follow-up the classifier can't identify as any task (UNKNOWN) INHERITS the
+        #        active task, so "Passport application" stays with ask_requirements;
+        #      - a message that clearly names a different task switches to it (classifier wins).
+        # 3. With no active task, ordinary classification stands (unchanged behaviour).
+        forced = _coerce_task_type(task_type)
+        active = _coerce_task_type(active_task_type)
+        if forced is not None:
+            intent = Intent(
+                task_type=forced,
+                confidence=1.0,
+                entities=intent.entities,
+                reason="Task selected directly from a DOCURA quick-action.",
+                method="quick_action_selection",
+            )
+        elif active is not None and _is_cancel(message):
+            return await self._narrate(
+                self._task_cleared(), message=message, history=history
+            )
+        elif active is not None and intent.task_type is TaskType.UNKNOWN:
+            intent = Intent(
+                task_type=active,
+                confidence=1.0,
+                entities=intent.entities,
+                reason="Continuing the active task from the selected quick-action.",
+                method="quick_action_continuation",
+            )
         task = intent.task_type
         if task is TaskType.ASK_REQUIREMENTS:
             turn = self._ask_requirements(intent)
@@ -250,6 +330,29 @@ class TaskOrchestrator:
             message=message,
             message_type=ConversationMessageType.TEXT,
             data={"task": _task_block(intent), "needs_user_input": False},
+        )
+
+    def _task_cleared(self) -> AssistantTurn:
+        # Recorded as general help (a non-continuable task), so the next turn sees no active task
+        # and returns to ordinary classification.
+        message = (
+            "Okay — I've cleared that. We can start something else whenever you're ready: I can "
+            "help with what an application needs, what documents you already have, whether you're "
+            "ready, or filling a form. DOCURA never submits a form."
+        )
+        return AssistantTurn(
+            message=message,
+            message_type=ConversationMessageType.TEXT,
+            data={
+                "task": {
+                    "task_type": TaskType.GENERAL_DOCURA_HELP.value,
+                    "confidence": 1.0,
+                    "entities": {},
+                    "reason": "The active task was cancelled by the user.",
+                    "method": "task_cleared",
+                },
+                "needs_user_input": False,
+            },
         )
 
     def _unknown(self, intent: Intent) -> AssistantTurn:

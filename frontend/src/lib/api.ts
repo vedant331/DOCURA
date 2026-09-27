@@ -498,10 +498,10 @@ export function deleteConversation(id: string) {
 
 // Send a message → runs the backend orchestration and returns BOTH the persisted user
 // message and DOCURA's structured reply. The reply is the source of truth (no local AI).
-export function sendMessage(id: string, content: string) {
+export function sendMessage(id: string, content: string, taskType?: string) {
   return authRequest<ChatTurnResponse>(
     `/conversations/${id}/messages`,
-    jsonInit({ content }),
+    jsonInit(taskType ? { content, task_type: taskType } : { content }),
   );
 }
 

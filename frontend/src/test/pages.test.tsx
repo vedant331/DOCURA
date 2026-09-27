@@ -126,9 +126,28 @@ describe("Command center — AI chat workspace (§5)", () => {
     await user.type(composer, "Hello DOCURA");
     await user.keyboard("{Enter}");
     // The message goes to the backend and the backend's reply is rendered (no local AI).
-    await waitFor(() => expect(m.sendMessage).toHaveBeenCalledWith("c1", "Hello DOCURA"));
+    // Free-text send carries no quick-action task hint (undefined); cards pass one explicitly.
+    await waitFor(() =>
+      expect(m.sendMessage).toHaveBeenCalledWith("c1", "Hello DOCURA", undefined),
+    );
     expect(await screen.findByText(/hello from docura/i)).toBeInTheDocument();
   });
+
+  it.each([
+    ["Find required documents", "What documents do I need, and which do I already have?", "ask_requirements"],
+    ["Check my application", "Which of my details are ready, missing, or need review?", "check_readiness"],
+    ["Fill a form", "How does DOCURA fill a form using my documents?", "fill_form"],
+    ["Review my documents", "Summarise what DOCURA has read from my documents.", "check_documents"],
+  ])(
+    "quick action %s sends its task type to the backend",
+    async (label, prompt, taskType) => {
+      const user = userEvent.setup();
+      renderApp(["/ask"]);
+      const card = await screen.findByRole("button", { name: new RegExp(label, "i") });
+      await user.click(card);
+      await waitFor(() => expect(m.sendMessage).toHaveBeenCalledWith("c1", prompt, taskType));
+    },
+  );
 
   it("renders the backend's structured readiness reply", async () => {
     const user = userEvent.setup();

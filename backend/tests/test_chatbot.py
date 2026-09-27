@@ -220,6 +220,211 @@ class TestMessagesAndOrchestration:
         assert "person.full_name" not in r.text  # no canonical values echoed
 
 
+# ------------------------------------------------------------- quick-action cards (API)
+class TestQuickActions:
+    """The four Ask-page cards must each start their intended workflow via an explicit
+    ``task_type`` hint — never fall through to a generic reply — while every grounding and
+    safety invariant still holds."""
+
+    async def _send(self, client: AsyncClient, token: str, content: str, task_type: str) -> dict:
+        cid = await _new_conversation(client, token)
+        r = await client.post(
+            f"/conversations/{cid}/messages",
+            headers=auth_header(token),
+            json={"content": content, "task_type": task_type},
+        )
+        assert r.status_code == 201, r.text
+        return r.json()["assistant_message"]
+
+    async def test_find_required_documents_starts_ask_requirements(
+        self, auth_client: AsyncClient
+    ) -> None:
+        token, _ = await register_and_login(auth_client, OWNER)
+        assistant = await self._send(
+            auth_client, token, "What documents do I need?", "ask_requirements"
+        )
+        data = assistant["data"]
+        assert data["task"]["task_type"] == "ask_requirements"
+        assert data["task"]["method"] == "quick_action_selection"
+        # Requirements are never fabricated without a configured authoritative source, and the
+        # user is asked for more instead of guessing.
+        assert data["requirements"]["status"] == "unavailable"
+        assert data["requirements"]["documents"] == []
+        assert data["needs_user_input"] is True
+
+    async def test_check_application_starts_check_readiness(
+        self, auth_client: AsyncClient
+    ) -> None:
+        token, _ = await register_and_login(auth_client, OWNER)
+        # This prompt does NOT match any readiness phrase, so without the hint it would misroute;
+        # the hint guarantees the readiness workflow.
+        assistant = await self._send(
+            auth_client,
+            token,
+            "Which of my details are ready, missing, or need review?",
+            "check_readiness",
+        )
+        data = assistant["data"]
+        assert data["task"]["task_type"] == "check_readiness"
+        # Never "ready" when requirements are unavailable — it reports it cannot check yet.
+        assert data["readiness"]["computable"] is False
+        assert data["readiness"]["ready"] is False
+
+    async def test_fill_a_form_starts_fill_form_and_never_submits(
+        self, auth_client: AsyncClient
+    ) -> None:
+        token, _ = await register_and_login(auth_client, OWNER)
+        # "How does DOCURA fill a form…" would classify to general help without the hint.
+        assistant = await self._send(
+            auth_client, token, "How does DOCURA fill a form using my documents?", "fill_form"
+        )
+        assert assistant["data"]["task"]["task_type"] == "fill_form"
+        assert assistant["message_type"] == "action"
+        assert "never submits" in assistant["content"].lower()
+        action_types = {a["type"] for a in assistant["data"]["actions"]}
+        assert "start_form_session" in action_types  # routes to the extension, does not fill/submit
+
+    async def test_review_my_documents_reflects_real_vault(
+        self, auth_client: AsyncClient
+    ) -> None:
+        token, _ = await register_and_login(auth_client, OWNER)
+        await upload_document(auth_client, token)
+        assistant = await self._send(
+            auth_client, token, "Summarise what DOCURA has read.", "check_documents"
+        )
+        data = assistant["data"]
+        assert data["task"]["task_type"] == "check_documents"
+        assert assistant["message_type"] == "document_status"
+        assert data["count"] == 1  # grounded in the real vault, not fabricated
+
+    async def test_review_my_documents_is_honest_when_vault_is_empty(
+        self, auth_client: AsyncClient
+    ) -> None:
+        token, _ = await register_and_login(auth_client, OWNER)
+        assistant = await self._send(
+            auth_client, token, "Summarise what DOCURA has read.", "check_documents"
+        )
+        assert assistant["data"]["count"] == 0
+        assert "haven't uploaded" in assistant["content"].lower()
+
+    async def test_hint_overrides_misclassifying_text(self, auth_client: AsyncClient) -> None:
+        token, _ = await register_and_login(auth_client, OWNER)
+        cid = await _new_conversation(auth_client, token)
+        text = "How does DOCURA fill a form using my documents?"
+        # Without the hint this text classifies to general help (the old generic behaviour)…
+        without = await auth_client.post(
+            f"/conversations/{cid}/messages",
+            headers=auth_header(token),
+            json={"content": text},
+        )
+        without_task = without.json()["assistant_message"]["data"]["task"]["task_type"]
+        assert without_task == "general_docura_help"
+        # …with the fill_form hint it starts the correct workflow.
+        with_hint = await auth_client.post(
+            f"/conversations/{cid}/messages",
+            headers=auth_header(token),
+            json={"content": text, "task_type": "fill_form"},
+        )
+        assert with_hint.json()["assistant_message"]["data"]["task"]["task_type"] == "fill_form"
+
+    async def test_unrecognised_hint_falls_back_to_classification(
+        self, auth_client: AsyncClient
+    ) -> None:
+        token, _ = await register_and_login(auth_client, OWNER)
+        # A client can't force an internal task; the hint is ignored and the text is classified.
+        assistant = await self._send(auth_client, token, "hello", "explain_blocker")
+        assert assistant["data"]["task"]["task_type"] == "general_docura_help"
+
+
+# ---------------------------------------------------- quick-action task continuation (API)
+class TestTaskContinuation:
+    """A selected quick-action task stays active across follow-up turns until it is completed,
+    switched to another explicit task, or cancelled — all end to end through the real API."""
+
+    async def _post(
+        self, client: AsyncClient, token: str, cid: str, content: str, task_type: str | None = None
+    ) -> dict:
+        body: dict[str, str] = {"content": content}
+        if task_type is not None:
+            body["task_type"] = task_type
+        r = await client.post(
+            f"/conversations/{cid}/messages", headers=auth_header(token), json=body
+        )
+        assert r.status_code == 201, r.text
+        return r.json()["assistant_message"]
+
+    async def test_followup_retains_ask_requirements(self, auth_client: AsyncClient) -> None:
+        token, _ = await register_and_login(auth_client, OWNER)
+        cid = await _new_conversation(auth_client, token)
+        await self._post(auth_client, token, cid, "What do I need?", "ask_requirements")
+        # Plain follow-up with NO task hint must stay with ask_requirements, not re-classify.
+        follow = await self._post(auth_client, token, cid, "Passport application")
+        assert follow["data"]["task"]["task_type"] == "ask_requirements"
+        assert follow["data"]["task"]["method"] == "quick_action_continuation"
+        # Still never fabricates requirements.
+        assert follow["data"]["requirements"]["status"] == "unavailable"
+        assert follow["data"]["requirements"]["documents"] == []
+
+    async def test_multiple_followups_retain_task(self, auth_client: AsyncClient) -> None:
+        token, _ = await register_and_login(auth_client, OWNER)
+        cid = await _new_conversation(auth_client, token)
+        await self._post(auth_client, token, cid, "Which are ready?", "check_readiness")
+        first = await self._post(auth_client, token, cid, "Passport application")
+        second = await self._post(auth_client, token, cid, "and the details")
+        assert first["data"]["task"]["task_type"] == "check_readiness"
+        assert second["data"]["task"]["task_type"] == "check_readiness"
+        # Readiness rules still hold: never "ready" without an authoritative requirements source.
+        assert second["data"]["readiness"]["computable"] is False
+        assert second["data"]["readiness"]["ready"] is False
+
+    async def test_explicit_new_quick_action_switches_task(self, auth_client: AsyncClient) -> None:
+        token, _ = await register_and_login(auth_client, OWNER)
+        cid = await _new_conversation(auth_client, token)
+        await self._post(auth_client, token, cid, "What do I need?", "ask_requirements")
+        switched = await self._post(auth_client, token, cid, "Fill a form", "fill_form")
+        assert switched["data"]["task"]["task_type"] == "fill_form"
+        assert switched["message_type"] == "action"
+        assert "never submits" in switched["content"].lower()
+
+    async def test_no_active_task_classifies_normally(self, auth_client: AsyncClient) -> None:
+        token, _ = await register_and_login(auth_client, OWNER)
+        cid = await _new_conversation(auth_client, token)
+        # No prior task: the follow-up phrase is classified as before (unknown), not inherited.
+        reply = await self._post(auth_client, token, cid, "Passport application")
+        assert reply["data"]["task"]["task_type"] == "unknown"
+
+    async def test_cancel_clears_active_task(self, auth_client: AsyncClient) -> None:
+        token, _ = await register_and_login(auth_client, OWNER)
+        cid = await _new_conversation(auth_client, token)
+        await self._post(auth_client, token, cid, "What do I need?", "ask_requirements")
+        cleared = await self._post(auth_client, token, cid, "never mind")
+        assert cleared["data"]["task"]["task_type"] == "general_docura_help"
+        assert cleared["data"]["task"]["method"] == "task_cleared"
+        # After cancelling, a plain follow-up is classified normally again (task truly cleared).
+        after = await self._post(auth_client, token, cid, "Passport application")
+        assert after["data"]["task"]["task_type"] == "unknown"
+
+    async def test_review_documents_continuation_uses_real_vault(
+        self, auth_client: AsyncClient
+    ) -> None:
+        token, _ = await register_and_login(auth_client, OWNER)
+        await upload_document(auth_client, token)
+        cid = await _new_conversation(auth_client, token)
+        await self._post(auth_client, token, cid, "Review my documents", "check_documents")
+        follow = await self._post(auth_client, token, cid, "Show me what you found.")
+        assert follow["data"]["task"]["task_type"] == "check_documents"
+        assert follow["message_type"] == "document_status"
+        assert follow["data"]["count"] == 1  # real vault, not fabricated
+
+    async def test_fill_form_continuation_never_submits(self, auth_client: AsyncClient) -> None:
+        token, _ = await register_and_login(auth_client, OWNER)
+        cid = await _new_conversation(auth_client, token)
+        await self._post(auth_client, token, cid, "Fill a form", "fill_form")
+        follow = await self._post(auth_client, token, cid, "Passport application")
+        assert follow["data"]["task"]["task_type"] == "fill_form"
+        assert "never submits" in follow["content"].lower()
+
+
 # --------------------------------------------------------------------- intent (unit)
 class TestIntent:
     @pytest.mark.parametrize(
